@@ -75,6 +75,8 @@ let activeAuthState = null;
 let latestQrDataUrl = null;
 let latestPairingCode = null;
 let setupStatus = 'Starting bot...';
+let pairingRequestAt = 0;
+let welcomeSent = false;
 
 const escapeHtml = (value) => String(value)
   .replace(/&/g, '&amp;')
@@ -117,6 +119,17 @@ const setupPage = () => `<!doctype html>
     <p class="muted">Status: ${escapeHtml(setupStatus)}</p>
   </main>
   <script>
+    const refreshSetup = async () => {
+      const response = await fetch('/api/status');
+      const data = await response.json();
+      document.querySelector('.muted:last-child').textContent = 'Status: ' + data.status;
+      if (data.qr) {
+        const image = document.querySelector('img[alt="WhatsApp QR code"]');
+        if (image) image.src = data.qr;
+        else location.reload();
+      }
+    };
+    setInterval(refreshSetup, 5000);
     document.querySelector('#pair-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       const result = document.querySelector('#result');
@@ -132,6 +145,18 @@ const setupPage = () => `<!doctype html>
 
 const startSetupServer = () => {
   const server = http.createServer(async (request, response) => {
+    if (request.method === 'GET' && request.url === '/health') {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ ok: true, status: setupStatus }));
+      return;
+    }
+
+    if (request.method === 'GET' && request.url === '/api/status') {
+      response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      response.end(JSON.stringify({ status: setupStatus, qr: latestQrDataUrl }));
+      return;
+    }
+
     if (request.method === 'GET' && request.url === '/') {
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       response.end(setupPage());
@@ -147,9 +172,13 @@ const startSetupServer = () => {
           if (!/^\d{8,15}$/.test(phoneNumber)) {
             throw new Error('Enter 8 to 15 digits, including the country code.');
           }
+          if (Date.now() - pairingRequestAt < 15000) {
+            throw new Error('Please wait 15 seconds before requesting another pairing code.');
+          }
           if (!activeSocket || activeAuthState?.creds?.registered) {
             throw new Error('Pairing is unavailable because the bot is already connected or still starting.');
           }
+          pairingRequestAt = Date.now();
           latestPairingCode = await activeSocket.requestPairingCode(phoneNumber);
           setupStatus = 'Pairing code generated.';
           response.writeHead(200, { 'content-type': 'application/json' });
@@ -370,6 +399,7 @@ async function startBot() {
   activeSocket = sock;
   activeAuthState = state;
   latestPairingCode = null;
+  latestQrDataUrl = null;
   setupStatus = state.creds.registered ? 'Authenticated.' : 'Waiting for QR scan or pairing code.';
 
   // Bind store to socket
@@ -443,6 +473,18 @@ async function startBot() {
       const ownerNames = Array.isArray(config.ownerName) ? config.ownerName.join(',') : config.ownerName;
       console.log(`👑 Owner: ${ownerNames}\n`);
       console.log('Bot is ready to receive messages!\n');
+
+      if (!welcomeSent) {
+        welcomeSent = true;
+        try {
+          const botJid = sock.user.id.split(':')[0];
+          await sock.sendMessage(botJid, {
+            text: `Welcome to ${config.botName}!\n\nYour WhatsApp account is now connected. This bot provides moderation, media, utility, AI, and entertainment commands.\n\nPrefix: ${config.prefix}\n\nYour SESSION_ID is a private login credential and is available in the deployment logs. Never share it in chat or with anyone.`
+          });
+        } catch (error) {
+          console.error('Welcome message error:', error.message || error);
+        }
+      }
 
       // Set bot status
       if (config.autoBio) {

@@ -132,8 +132,6 @@ When the bot starts:
 
 ---
 
-## 🌐 Community
-
 ## Render Connection Setup
 
 After deploying as a Render Web Service, open the service URL shown by Render. The setup page provides two connection methods:
@@ -143,23 +141,21 @@ After deploying as a Render Web Service, open the service URL shown by Render. T
 
 After either method succeeds, copy the `SESSION_ID` printed in the Render logs and add it as a Render environment variable. Render's free service filesystem is temporary, so using `SESSION_ID` prevents the bot from needing to be linked again after a restart or redeploy.
 
+### Keeping a Render Free Service Available
+
+The bot exposes `https://YOUR-SERVICE.onrender.com/health` for uptime monitoring. Add that URL to an external monitor such as UptimeRobot with a five-minute interval. This can reduce idle wake-up delays, but Render may still suspend free services according to its current free-tier policy; a script running inside the sleeping service cannot reliably prevent that. A paid Render instance is the reliable always-on option.
+
+Each Render service stores one WhatsApp account. A new QR is generated whenever that service starts a fresh unauthenticated session. Do not share one service between multiple users; deploy a separate service and `SESSION_ID` for each account.
+
+The welcome message sent after connection includes a short bot introduction and warns about credentials. The real `SESSION_ID` is intentionally never sent in WhatsApp because it is a private login credential.
+
 <div align="center">
-
-<a href="https://t.me/+3QhFUZHx-nhhZmY1" target="_blank">
-  <img src="https://img.shields.io/badge/Join-Telegram-0088cc?style=for-the-badge&logo=telegram&logoColor=white" alt="Join Telegram">
-</a>
-
-<a href="https://whatsapp.com/channel/0029Va90zAnIHphOuO8Msp3A" target="_blank">
-  <img src="https://img.shields.io/badge/Join-WhatsApp-25D366?style=for-the-badge&logo=whatsapp&logoColor=white" alt="Join WhatsApp Channel">
-</a>
-
 </div>
 
 ---
 
 ## 🙏 Credits
 
-- **Mr Unique Hacker** – Main developer & maintainer  
 - **Baileys** – WhatsApp Web API library (`@whiskeysockets/baileys`)  
 - Other open‑source libraries listed in `package.json`
 
