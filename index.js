@@ -61,12 +61,116 @@ const {
   fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
+const qrImage = require('qrcode');
+const http = require('http');
 const config = require('./config');
 const handler = require('./handler');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const os = require('os');
+
+let activeSocket = null;
+let activeAuthState = null;
+let latestQrDataUrl = null;
+let latestPairingCode = null;
+let setupStatus = 'Starting bot...';
+
+const escapeHtml = (value) => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
+
+const setupPage = () => `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(config.botName)} setup</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 680px; margin: 40px auto; padding: 0 20px; color: #17202a; }
+    main { border: 1px solid #d8dee4; border-radius: 10px; padding: 24px; }
+    img { display: block; width: min(100%, 360px); margin: 20px auto; }
+    input, button { box-sizing: border-box; font: inherit; padding: 10px; }
+    input { width: 100%; margin: 8px 0; }
+    button { cursor: pointer; background: #1769aa; color: white; border: 0; border-radius: 6px; }
+    #result { margin-top: 16px; font-weight: 600; word-break: break-word; }
+    .muted { color: #5f6b76; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>${escapeHtml(config.botName)} connection</h1>
+    <p class="muted">Choose one method to connect this deployment to WhatsApp.</p>
+    <h2>Option 1: QR code</h2>
+    <p>Open WhatsApp on your phone, go to Linked devices, choose Link a device, then scan this code.</p>
+    ${latestQrDataUrl ? `<img src="${latestQrDataUrl}" alt="WhatsApp QR code">` : '<p>The QR code will appear here while the bot is waiting for authentication.</p>'}
+    <h2>Option 2: Pairing code</h2>
+    <p>Enter the WhatsApp number with country code, without <code>+</code>, spaces, or punctuation.</p>
+    <form id="pair-form">
+      <input name="phoneNumber" inputmode="numeric" placeholder="e.g. 2348012345678" required pattern="[0-9]{8,15}">
+      <button type="submit">Generate pairing code</button>
+    </form>
+    <div id="result"></div>
+    <p class="muted">Status: ${escapeHtml(setupStatus)}</p>
+  </main>
+  <script>
+    document.querySelector('#pair-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const result = document.querySelector('#result');
+      result.textContent = 'Requesting code...';
+      const phoneNumber = new FormData(event.target).get('phoneNumber');
+      const response = await fetch('/api/pair', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phoneNumber }) });
+      const data = await response.json();
+      result.textContent = data.error || ('Pairing code: ' + data.code);
+    });
+  </script>
+</body>
+</html>`;
+
+const startSetupServer = () => {
+  const server = http.createServer(async (request, response) => {
+    if (request.method === 'GET' && request.url === '/') {
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      response.end(setupPage());
+      return;
+    }
+
+    if (request.method === 'POST' && request.url === '/api/pair') {
+      let body = '';
+      request.on('data', (chunk) => { body += chunk; });
+      request.on('end', async () => {
+        try {
+          const phoneNumber = String(JSON.parse(body).phoneNumber || '').replace(/\D/g, '');
+          if (!/^\d{8,15}$/.test(phoneNumber)) {
+            throw new Error('Enter 8 to 15 digits, including the country code.');
+          }
+          if (!activeSocket || activeAuthState?.creds?.registered) {
+            throw new Error('Pairing is unavailable because the bot is already connected or still starting.');
+          }
+          latestPairingCode = await activeSocket.requestPairingCode(phoneNumber);
+          setupStatus = 'Pairing code generated.';
+          response.writeHead(200, { 'content-type': 'application/json' });
+          response.end(JSON.stringify({ code: latestPairingCode }));
+        } catch (error) {
+          response.writeHead(400, { 'content-type': 'application/json' });
+          response.end(JSON.stringify({ error: error.message || 'Unable to generate pairing code.' }));
+        }
+      });
+      return;
+    }
+
+    response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    response.end('Not found');
+  });
+
+  const port = Number(process.env.PORT) || 3000;
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`🌐 Setup page available on port ${port}. Open the deployed service URL to connect WhatsApp.`);
+  });
+};
 
 // Remove Puppeteer cache (if some dependency downloaded Chromium into ~/.cache/puppeteer)
 function cleanupPuppeteerCache() {
@@ -263,6 +367,10 @@ async function startBot() {
     markOnlineOnConnect: false,
     getMessage: async () => undefined // Don't load messages from store
   });
+  activeSocket = sock;
+  activeAuthState = state;
+  latestPairingCode = null;
+  setupStatus = state.creds.registered ? 'Authenticated.' : 'Waiting for QR scan or pairing code.';
 
   // Bind store to socket
   store.bind(sock.ev);
@@ -301,6 +409,8 @@ async function startBot() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
+      latestQrDataUrl = await qrImage.toDataURL(qr, { width: 360, margin: 2 });
+      setupStatus = 'Waiting for QR scan or pairing code.';
       console.log('\n\n📱 Scan this QR code with WhatsApp:\n');
       qrcode.generate(qr, { small: true });
       console.log('');
@@ -308,6 +418,7 @@ async function startBot() {
     }
 
     if (connection === 'close') {
+      setupStatus = 'Connection closed. Reconnecting...';
       const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const errorMessage = lastDisconnect?.error?.message || 'Unknown error';
@@ -323,6 +434,8 @@ async function startBot() {
         setTimeout(() => startBot(), 3000);
       }
     } else if (connection === 'open') {
+      latestQrDataUrl = null;
+      setupStatus = 'Connected.';
       console.log('\n✅ Bot connected successfully!');
       console.log(`📱 Bot Number: ${sock.user.id.split(':')[0]}`);
       console.log(`🤖 Bot Name: ${config.botName}`);
@@ -500,6 +613,7 @@ console.log(`👑 Owner: ${ownerNames}\n`);
 // Proactively delete Puppeteer cache so it doesn't fill disk on panels
 cleanupPuppeteerCache();
 
+startSetupServer();
 startBot().catch(err => {
   console.error('Error starting bot:', err);
   process.exit(1);

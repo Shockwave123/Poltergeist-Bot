@@ -134,6 +134,15 @@ When the bot starts:
 
 ## 🌐 Community
 
+## Render Connection Setup
+
+After deploying as a Render Web Service, open the service URL shown by Render. The setup page provides two connection methods:
+
+- **QR code:** scan it from WhatsApp > Linked devices > Link a device.
+- **Pairing code:** enter the WhatsApp number with its country code, without `+`, spaces, or punctuation, then enter the generated code in WhatsApp > Linked devices > Link with phone number.
+
+After either method succeeds, copy the `SESSION_ID` printed in the Render logs and add it as a Render environment variable. Render's free service filesystem is temporary, so using `SESSION_ID` prevents the bot from needing to be linked again after a restart or redeploy.
+
 <div align="center">
 
 <a href="https://t.me/+3QhFUZHx-nhhZmY1" target="_blank">
