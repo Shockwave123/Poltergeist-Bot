@@ -1,0 +1,29 @@
+{
+  "name": "Poltergeist MD",
+  "description": "WhatsApp MD bot (Baileys)",
+  "repository": "",
+  "keywords": ["whatsapp", "baileys", "bot", "node"],
+  "buildpacks": [
+    {
+      "url": "https://github.com/heroku/heroku-buildpack-nodejs.git"
+    }
+  ],
+  "env": {
+    "SESSION_ID": {
+      "description": "PoltergeistMD session string (e.g. PoltergeistMD!<base64_compressed_data>)",
+      "required": false,
+      "value": ""
+    },
+    "OWNER_NUMBER": {
+      "description": "Bot owner WhatsApp number without + or spaces (e.g. 1234567890). For multiple owners, separate with commas.",
+      "required": false,
+      "value": ""
+    },
+    "OWNER_NAME": {
+      "description": "Bot owner display name. For multiple owners, separate with commas.",
+      "required": false,
+      "value": ""
+    }
+  }
+}
+
