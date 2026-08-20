@@ -155,11 +155,7 @@ module.exports = {
         });
       }
 
-      await sock.sendMessage(
-        chatId,
-        { text: '✅ Revealed view-once content has been forwarded to owner DM.' },
-        { quoted: msg }
-      );
+      await sock.sendMessage(chatId, { react: { text: '✅', key: msg.key } });
     } catch (error) {
       console.error('Error in viewonce command:', error);
       await sock.sendMessage(

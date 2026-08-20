@@ -72,7 +72,7 @@ module.exports = {
         if (!ownerJid) return await sock.sendMessage(chatId, { text: '❌ No owner configured.' }, { quoted: msg });
 
         await sock.sendMessage(ownerJid, { text: `📩 Status forwarded from ${chatId}\n\n${text}` });
-        return await sock.sendMessage(chatId, { text: '✅ Status/text has been sent to owner DM.' }, { quoted: msg });
+        return await sock.sendMessage(chatId, { react: { text: '✅', key: msg.key } });
       }
 
       // Determine download type
@@ -113,7 +113,7 @@ module.exports = {
         await sock.sendMessage(ownerJid, { document: buffer, fileName: 'file' });
       }
 
-      await sock.sendMessage(chatId, { text: '✅ Status/media has been sent to owner DM.' }, { quoted: msg });
+      await sock.sendMessage(chatId, { react: { text: '✅', key: msg.key } });
     } catch (error) {
       console.error('Error in getss command:', error);
       try {
