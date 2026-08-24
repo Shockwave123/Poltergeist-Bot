@@ -9,7 +9,8 @@ const ANIME_API = 'https://kitsu.io/api/edge/anime';
 const MAX_IMAGE_SIZE = 7 * 1024 * 1024;
 
 async function getAnimeImage(category) {
-  const { data } = await axios.get(`${IMAGE_API}/${category}`, {
+  const cacheBust = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const { data } = await axios.get(`${IMAGE_API}/${category}?cacheBust=${cacheBust}`, {
     headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
     timeout: 30000,
   });

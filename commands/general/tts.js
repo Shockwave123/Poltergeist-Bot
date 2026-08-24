@@ -26,13 +26,14 @@ module.exports = {
         );
       }
 
+      const speechText = text.slice(0, MAX_CHARS);
       if (text.length > MAX_CHARS) {
-        await extra.reply(`Text too long — max ${MAX_CHARS} characters. Trimming...`);
+        await extra.reply(`That is a little long, so I will read the first ${MAX_CHARS} characters.`);
       }
 
       await extra.react('🎙️');
 
-      const mp3Buffer = await generateSpeech(text, lang);
+      const mp3Buffer = await generateSpeech(speechText, lang);
 
       let audioBuffer = mp3Buffer;
       let mimetype = 'audio/ogg; codecs=opus';

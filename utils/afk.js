@@ -64,6 +64,16 @@ function setEnabled(enabled, customMessage) {
   return saveState(state);
 }
 
+function isVoiceEnabled() {
+  return loadState().voice === true;
+}
+
+function setVoiceEnabled(enabled) {
+  const state = loadState();
+  state.voice = enabled === true;
+  return saveState(state);
+}
+
 function shouldNotify(chatId, senderId) {
   return !notifiedUsers.has(notifyKey(chatId, senderId));
 }
@@ -76,6 +86,8 @@ module.exports = {
   isEnabled,
   getMessage,
   setEnabled,
+  isVoiceEnabled,
+  setVoiceEnabled,
   shouldNotify,
   markNotified,
   DEFAULT_MESSAGE,

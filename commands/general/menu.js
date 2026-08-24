@@ -76,16 +76,7 @@ module.exports = {
         await sock.sendMessage(extra.from, {
           image: fs.readFileSync(imagePath),
           caption: menuText,
-          mentions: extra.sender ? [extra.sender] : [],
-          contextInfo: {
-            forwardingScore: 1,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-              newsletterJid: config.newsletterJid || '120363161513685998@newsletter',
-              newsletterName: config.botName,
-              serverMessageId: -1
-            }
-          }
+          mentions: extra.sender ? [extra.sender] : []
         }, { quoted: msg });
       } else {
         await sock.sendMessage(extra.from, {

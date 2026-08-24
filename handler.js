@@ -14,6 +14,8 @@ const axios = require('axios');
 const chatbotCmd = require('./commands/admin/chatbot');
 const { containsBadWord } = require('./utils/badwords');
 const { writeExifImg } = require('./utils/exif');
+const { sendVoiceNote } = require('./utils/voiceNote');
+const autoChat = require('./utils/autoChat');
 
 // Group metadata cache to prevent rate limiting
 const groupMetadataCache = new Map();
@@ -859,6 +861,18 @@ const handleMessage = async (sock, msg) => {
 
     // AFK — one-time reply when owner is away (groups + DMs)
     if (!msg.key.fromMe) {
+      if (!isOwner(sender) && autoChat.getActiveChat() === from && body && !body.startsWith(config.prefix)) {
+        try {
+          await chatbotCmd.handleContinuousChat(sock, msg, body, from);
+        } catch (autoChatError) {
+          console.error('[autochat] error:', autoChatError.message);
+          await sock.sendMessage(from, {
+            text: 'I hit a small snag. Send that again in a moment.'
+          }, { quoted: msg });
+        }
+        return;
+      }
+
       const afk = require('./utils/afk');
       if (afk.isEnabled() && !isOwner(sender)) {
         let shouldHandleAfk = false;
@@ -880,7 +894,17 @@ const handleMessage = async (sock, msg) => {
         if (shouldHandleAfk) {
           if (afk.shouldNotify(from, sender)) {
             afk.markNotified(from, sender);
-            await sock.sendMessage(from, { text: afk.getMessage() }, { quoted: msg });
+            const afkMessage = afk.getMessage();
+            if (afk.isVoiceEnabled()) {
+              try {
+                await sendVoiceNote(sock, from, afkMessage, msg);
+              } catch (voiceError) {
+                console.error('[afk] voice reply error:', voiceError.message);
+                await sock.sendMessage(from, { text: afkMessage }, { quoted: msg });
+              }
+            } else {
+              await sock.sendMessage(from, { text: afkMessage }, { quoted: msg });
+            }
           }
           return;
         }
@@ -897,7 +921,7 @@ const handleMessage = async (sock, msg) => {
         const isReplyToBot = ctx?.participant && isBotJid(ctx.participant, sock);
 
         if ((isMentioned || isReplyToBot) && !body.startsWith(config.prefix)) {
-          await chatbotCmd.handleChat(sock, msg, body, sender);
+          await chatbotCmd.handleChat(sock, msg, body, sender, { voice: groupSettings.chatbotVoice === true });
           return;
         }
       }

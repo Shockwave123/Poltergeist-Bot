@@ -22,13 +22,16 @@ module.exports = {
         return extra.reply(
           `🔴 *AFK Mode*\n\n` +
           `Status: *${on ? 'ON' : 'OFF'}*\n\n` +
+          `Voice replies: *${afk.isVoiceEnabled() ? 'ON' : 'OFF'}*\n\n` +
           `When ON:\n` +
           `• *Groups* — one-time reply when someone @tags or replies to the bot\n` +
           `• *DMs* — one-time reply to any message\n` +
           `Repeated messages from the same person are ignored to avoid spam.\n\n` +
           `Usage:\n` +
           `  .afk on\n` +
-          `  .afk on busy right now\n` +
+          `  .afk on voice busy right now\n` +
+          `  .afk voice on\n` +
+          `  .afk voice off\n` +
           `  .afk off`
         );
       }
@@ -37,12 +40,23 @@ module.exports = {
         if (afk.isEnabled()) {
           return extra.reply('*AFK is already ON*');
         }
-        const customMsg = args.slice(1).join(' ').trim();
+        const voice = (args[1] || '').toLowerCase() === 'voice';
+        const customMsg = args.slice(voice ? 2 : 1).join(' ').trim();
         const message = customMsg
           ? `🔴 *AFK Mode ON*\n\n${customMsg}`
           : afk.DEFAULT_MESSAGE;
         afk.setEnabled(true, message);
-        return extra.reply('*AFK mode enabled.* Bot will notify taggers/repliers once each.');
+        afk.setVoiceEnabled(voice);
+        return extra.reply(`*AFK mode enabled.* ${voice ? 'Voice' : 'Text'} replies will notify taggers/repliers once each.`);
+      }
+
+      if (opt === 'voice') {
+        const voiceOption = (args[1] || '').toLowerCase();
+        if (!['on', 'off'].includes(voiceOption)) {
+          return extra.reply('❌ Use: .afk voice on | .afk voice off');
+        }
+        afk.setVoiceEnabled(voiceOption === 'on');
+        return extra.reply(`*AFK voice replies ${voiceOption === 'on' ? 'enabled' : 'disabled'}.*`);
       }
 
       if (opt === 'off') {
@@ -50,6 +64,7 @@ module.exports = {
           return extra.reply('*AFK is already OFF*');
         }
         afk.setEnabled(false);
+        afk.setVoiceEnabled(false);
         return extra.reply('*AFK mode disabled.* You are back online.');
       }
 

@@ -63,6 +63,7 @@ module.exports = {
       nsfw: false,
       detect: false,
       chatbot: false,
+      chatbotVoice: false,
       autosticker: false // Auto-convert images/videos to stickers
     },
     
