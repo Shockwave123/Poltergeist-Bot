@@ -2,13 +2,10 @@
  * Megumin Command - Get random megumin anime images
  */
 
-const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { getTempDir, deleteTempFile } = require('../../utils/tempManager');
-
-const BASE = 'https://api.princetechn.com/api/anime/megumin';
-const API_KEY = 'prince';
+const { getAnimeImage } = require('../../utils/animeApi');
 
 module.exports = {
   name: 'megumin',
@@ -18,41 +15,13 @@ module.exports = {
   usage: 'megumin',
   execute: async (sock, msg, args, extra) => {
     try {
-      const url = `${BASE}?apikey=${API_KEY}`;
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Accept': 'application/json'
-        },
-        timeout: 30000
-      });
-      
-      if (!response.data || !response.data.result) {
-        throw new Error('Invalid API response: missing image URL');
-      }
-      
-      const imageUrl = response.data.result;
-      
-      if (!imageUrl || typeof imageUrl !== 'string') {
-        throw new Error('Invalid image URL in API response');
-      }
-      
-      const imageResponse = await axios.get(imageUrl, {
-        responseType: 'arraybuffer',
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Accept': 'image/*'
-        },
-        timeout: 30000
-      });
-      
-      const imageBuffer = Buffer.from(imageResponse.data);
+      const { imageUrl, imageResponse, imageBuffer } = await getAnimeImage('waifu');
       
       if (!imageBuffer || imageBuffer.length === 0) {
         throw new Error('Empty image response');
       }
       
-      const maxImageSize = 5 * 1024 * 1024;
+      const maxImageSize = 7 * 1024 * 1024;
       if (imageBuffer.length > maxImageSize) {
         throw new Error(`Image too large: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (max 5MB)`);
       }

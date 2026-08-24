@@ -1,6 +1,6 @@
 /**
  * GPT Image Command
- * Edit image using AI Image Editor (MagicEraser) - image_url + prompt API
+ * Edit image using Pollinations image generation - image_url + prompt API
  */
 
 const axios = require('axios');
@@ -9,7 +9,7 @@ const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { webp2png } = require('../../utils/webp2mp4');
 const sharp = require('sharp');
 
-const EDITIMG_API = 'https://restapis.xrizaldev.my.id/api/ai2/editimg';
+const IMAGE_API = 'https://image.pollinations.ai/prompt';
 const UGUU_UPLOAD = 'https://uguu.se/upload';
 
 /** Upload buffer to uguu.se and return public URL */
@@ -132,32 +132,17 @@ module.exports = {
         return await extra.reply('❌ Failed to upload image. Please try again.');
       }
 
-      // Call AI Image Editor API (GET with image_url + prompt)
-      const apiUrl = `${EDITIMG_API}?image_url=${encodeURIComponent(imageUrl)}&prompt=${encodeURIComponent(prompt)}`;
+      // Pollinations accepts the source image URL alongside the editing prompt.
+      const apiUrl = `${IMAGE_API}/${encodeURIComponent(prompt)}?image=${encodeURIComponent(imageUrl)}&nologo=true`;
 
       const response = await axios.get(apiUrl, {
+        responseType: 'arraybuffer',
         timeout: 120000,
         maxContentLength: 10 * 1024 * 1024,
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
       });
 
-      const result = response.data?.result || response.data;
-      if (response.data?.status === false) {
-        return await extra.reply('❌ API returned an error. Please try another image or prompt.');
-      }
-      const outputImageUrl = result?.output_image;
-
-      if (!outputImageUrl) {
-        return await extra.reply('❌ No image URL in API response. Please try again.');
-      }
-
-      // Download the result image
-      const imageResponse = await axios.get(outputImageUrl, {
-        responseType: 'arraybuffer',
-        timeout: 60000,
-      });
-
-      const resultImageBuffer = Buffer.from(imageResponse.data);
+      const resultImageBuffer = Buffer.from(response.data);
 
       if (!resultImageBuffer || resultImageBuffer.length === 0) {
         return await extra.reply('❌ Empty image received from API. Please try again.');

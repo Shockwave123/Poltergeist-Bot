@@ -589,10 +589,10 @@ const handleMessage = async (sock, msg) => {
         }
         return;
       } else if (buttonId === 'btn_help') {
-        // Execute list command again (help)
-        const listCmd = commands.get('list');
-        if (listCmd) {
-          await listCmd.execute(sock, msg, [], {
+        // Execute the detailed help command
+        const helpCmd = commands.get('help');
+        if (helpCmd) {
+          await helpCmd.execute(sock, msg, [], {
             from,
             sender,
             isGroup,

@@ -1,11 +1,10 @@
 /**
- * Imagine Command - AI image generation via PrinceTech Flux API
+ * Imagine Command - AI image generation via Pollinations
  */
 
 const axios = require('axios');
 
-const API_BASE = 'https://api.princetechn.com/api/ai/fluximg';
-const API_KEY = 'prince';
+const IMAGE_API = 'https://image.pollinations.ai/prompt';
 
 module.exports = {
   name: 'imagine',
@@ -23,20 +22,8 @@ module.exports = {
         );
       }
 
-      const apiUrl = `${API_BASE}?apikey=${API_KEY}&prompt=${encodeURIComponent(prompt)}`;
-      const { data } = await axios.get(apiUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          Accept: 'application/json',
-        },
-        timeout: 120000,
-      });
-
-      if (!data?.success || data?.status !== 200 || !data?.result) {
-        throw new Error(data?.message || 'API did not return an image');
-      }
-
-      const imageResponse = await axios.get(data.result, {
+      const apiUrl = `${IMAGE_API}/${encodeURIComponent(prompt)}?nologo=true`;
+      const imageResponse = await axios.get(apiUrl, {
         responseType: 'arraybuffer',
         headers: {
           'User-Agent': 'Mozilla/5.0',

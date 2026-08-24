@@ -2,13 +2,10 @@
  * Neko Command - Get random neko anime images
  */
 
-const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { getTempDir, deleteTempFile } = require('../../utils/tempManager');
-
-const BASE = 'https://api.princetechn.com/api/anime/neko';
-const API_KEY = 'prince';
+const { getAnimeImage } = require('../../utils/animeApi');
 
 module.exports = {
   name: 'neko',
@@ -19,37 +16,7 @@ module.exports = {
   execute: async (sock, msg, args, extra) => {
     try {
       // Fetch JSON from API to get image URL
-      const url = `${BASE}?apikey=${API_KEY}`;
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Accept': 'application/json'
-        },
-        timeout: 30000
-      });
-      
-      // Extract image URL from response
-      if (!response.data || !response.data.result) {
-        throw new Error('Invalid API response: missing image URL');
-      }
-      
-      const imageUrl = response.data.result;
-      
-      if (!imageUrl || typeof imageUrl !== 'string') {
-        throw new Error('Invalid image URL in API response');
-      }
-      
-      // Download image from the URL
-      const imageResponse = await axios.get(imageUrl, {
-        responseType: 'arraybuffer',
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Accept': 'image/*'
-        },
-        timeout: 30000
-      });
-      
-      const imageBuffer = Buffer.from(imageResponse.data);
+      const { imageUrl, imageResponse, imageBuffer } = await getAnimeImage('neko');
       
       // Verify buffer is valid
       if (!imageBuffer || imageBuffer.length === 0) {
@@ -57,7 +24,7 @@ module.exports = {
       }
       
       // Check file size (WhatsApp image limit is 5MB)
-      const maxImageSize = 5 * 1024 * 1024; // 5MB
+      const maxImageSize = 7 * 1024 * 1024; // 7MB
       if (imageBuffer.length > maxImageSize) {
         throw new Error(`Image too large: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (max 5MB)`);
       }
