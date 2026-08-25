@@ -16,6 +16,7 @@ const { containsBadWord } = require('./utils/badwords');
 const { writeExifImg } = require('./utils/exif');
 const { sendVoiceNote } = require('./utils/voiceNote');
 const autoChat = require('./utils/autoChat');
+const { addMessage: addGroupConversationMessage } = require('./utils/groupConversation');
 
 // Group metadata cache to prevent rate limiting
 const groupMetadataCache = new Map();
@@ -624,6 +625,10 @@ const handleMessage = async (sock, msg) => {
     }
     
     body = (body || '').trim();
+
+    if (isGroup && !msg.key.fromMe && body && !body.startsWith(config.prefix)) {
+      addGroupConversationMessage(from, sender, body);
+    }
     
     // Check antiall protection (owner only feature)
     if (isGroup) {
@@ -859,20 +864,24 @@ const handleMessage = async (sock, msg) => {
       // ignore fun game handler errors
     }
 
+    if (!msg.key.fromMe && body && !body.startsWith(config.prefix)) {
+      autoChat.recordMessage(from, body);
+    }
+
+    if (!msg.key.fromMe && !isOwner(sender) && autoChat.getActiveChat() === from && body && !body.startsWith(config.prefix)) {
+      try {
+        await chatbotCmd.handleContinuousChat(sock, msg, body, from);
+      } catch (autoChatError) {
+        console.error('[autochat] error:', autoChatError.message);
+        await sock.sendMessage(from, {
+          text: 'I hit a small snag. Send that again in a moment.'
+        }, { quoted: msg });
+      }
+      return;
+    }
+
     // AFK — one-time reply when owner is away (groups + DMs)
     if (!msg.key.fromMe) {
-      if (!isOwner(sender) && autoChat.getActiveChat() === from && body && !body.startsWith(config.prefix)) {
-        try {
-          await chatbotCmd.handleContinuousChat(sock, msg, body, from);
-        } catch (autoChatError) {
-          console.error('[autochat] error:', autoChatError.message);
-          await sock.sendMessage(from, {
-            text: 'I hit a small snag. Send that again in a moment.'
-          }, { quoted: msg });
-        }
-        return;
-      }
-
       const afk = require('./utils/afk');
       if (afk.isEnabled() && !isOwner(sender)) {
         let shouldHandleAfk = false;

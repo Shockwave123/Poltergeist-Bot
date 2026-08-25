@@ -15,7 +15,7 @@ module.exports = {
   usage: 'hneko',
   execute: async (sock, msg, args, extra) => {
     try {
-      const { imageUrl, imageResponse, imageBuffer } = await getAnimeImage('lewd');
+      const { imageUrl, imageResponse, imageBuffer } = await getAnimeImage('hneko');
       
       if (!imageBuffer || imageBuffer.length === 0) {
         throw new Error('Empty image response');

@@ -15,7 +15,7 @@ module.exports = {
   usage: 'megumin',
   execute: async (sock, msg, args, extra) => {
     try {
-      const { imageUrl, imageResponse, imageBuffer } = await getAnimeImage('waifu');
+      const { imageUrl, imageResponse, imageBuffer } = await getAnimeImage('megumin');
       
       if (!imageBuffer || imageBuffer.length === 0) {
         throw new Error('Empty image response');
@@ -23,7 +23,7 @@ module.exports = {
       
       const maxImageSize = 7 * 1024 * 1024;
       if (imageBuffer.length > maxImageSize) {
-        throw new Error(`Image too large: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (max 5MB)`);
+        throw new Error(`Image too large: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (max 7MB)`);
       }
       
       const contentType = imageResponse.headers['content-type'] || '';

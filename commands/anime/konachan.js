@@ -16,7 +16,7 @@ module.exports = {
   execute: async (sock, msg, args, extra) => {
     try {
       // Fetch JSON from API to get image URL
-      const { imageUrl, imageResponse, imageBuffer } = await getAnimeImage('waifu');
+      const { imageUrl, imageResponse, imageBuffer } = await getAnimeImage('konachan');
       
       // Verify buffer is valid
       if (!imageBuffer || imageBuffer.length === 0) {

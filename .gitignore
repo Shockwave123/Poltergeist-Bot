@@ -1,4 +1,5 @@
 node_modules/
 .env
+database/googleKeys.json
 auth_info_baileys/
 session/

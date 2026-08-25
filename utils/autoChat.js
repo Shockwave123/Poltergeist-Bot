@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const STATE_FILE = path.join(__dirname, '../database/autochat.json');
+const MAX_RECENT_MESSAGES = 20;
 
 function loadState() {
   try {
@@ -48,4 +49,20 @@ function disable() {
   saveState({ enabled: false, chatId: null });
 }
 
-module.exports = { getActiveChat, enable, disable };
+function recordMessage(chatId, text) {
+  if (!chatId || !text) return;
+  const state = loadState();
+  const history = state.history || {};
+  const messages = history[chatId] || [];
+  messages.push(String(text).trim());
+  if (messages.length > MAX_RECENT_MESSAGES) messages.shift();
+  history[chatId] = messages;
+  state.history = history;
+  saveState(state);
+}
+
+function getRecentMessages(chatId) {
+  return [...(loadState().history?.[chatId] || [])];
+}
+
+module.exports = { getActiveChat, enable, disable, recordMessage, getRecentMessages };
