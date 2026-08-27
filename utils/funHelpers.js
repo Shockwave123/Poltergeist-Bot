@@ -1,5 +1,4 @@
-const axios = require('axios');
-const APIs = require('./api');
+const { generateContent } = require('./googleAi');
 
 function tag(jid) {
   return `@${(jid || '').split('@')[0]}`;
@@ -124,43 +123,13 @@ function getTwoUsers(msg, extra, sock) {
   return { a, b };
 }
 
-function parseAiText(data) {
-  const raw = data?.result || data?.msg || data?.response || data?.data?.msg;
-  if (typeof raw === 'string') {
-    return raw.replace(/\*([^*]+)\*/g, '$1').trim().slice(0, 4000);
-  }
-  if (raw && typeof raw === 'object' && raw.text) {
-    return String(raw.text).trim().slice(0, 4000);
-  }
-  return '';
-}
-
-async function askPrinceAi(prompt) {
-  const res = await axios.get('https://api.princetechn.com/api/ai/chat', {
-    params: { apikey: 'prince_tech_api_azfsbshfb', q: prompt },
+async function askFunAi(prompt, userKey) {
+  return generateContent([{ text: `Create a short, playful WhatsApp response. Keep it harmless and avoid hateful or threatening language.\n\n${prompt}` }], {
+    apiKey: userKey,
+    temperature: 0.85,
+    maxOutputTokens: 250,
     timeout: 30000,
   });
-  const text = parseAiText(res.data);
-  if (!text) throw new Error('Empty prince response');
-  return text;
-}
-
-async function askFunAi(prompt) {
-  try {
-    return await askPrinceAi(prompt);
-  } catch (e) {
-    console.error('[funAi] prince failed:', e.message);
-  }
-
-  try {
-    const res = await APIs.chatAI(prompt);
-    const text = parseAiText(res);
-    if (text) return text;
-    throw new Error('Empty shizo response');
-  } catch (e) {
-    console.error('[funAi] shizo failed:', e.message);
-    throw new Error('AI unavailable');
-  }
 }
 
 async function sendMention(sock, from, msg, text, jids) {

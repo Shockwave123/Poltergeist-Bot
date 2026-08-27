@@ -17,8 +17,8 @@ module.exports = {
 
     if (option === 'set') {
       const key = args[1]?.trim();
-      if (!key || !/^AIza[\w-]{20,}$/.test(key)) {
-        return extra.reply('Use `.googleai set YOUR_GOOGLE_AI_KEY`. The key normally starts with `AIza`.');
+      if (!key || !/^(?:AIza|AQ\.)[A-Za-z0-9_.-]{20,}$/.test(key)) {
+        return extra.reply('Use `.googleai set YOUR_GOOGLE_AI_KEY`. Google keys may start with `AIza` or `AQ.`.');
       }
       try {
         setKey(userId, key);

@@ -2,7 +2,8 @@
  * AI Chat Command - ChatGPT-style responses
  */
 
-const APIs = require('../../utils/api');
+const { generateContent } = require('../../utils/googleAi');
+const { getKey } = require('../../utils/userApiKeys');
 
 module.exports = {
   name: 'ai',
@@ -19,10 +20,11 @@ module.exports = {
       
       const question = args.join(' ');
       
-      const response = await APIs.chatAI(question);
-      
-      // Send only the answer without labels
-      const answer = response.response || response.msg || response.data?.msg || response;
+      const answer = await generateContent([{ text: `Answer this question clearly and naturally. Keep it concise unless detail is needed.\n\n${question}` }], {
+        apiKey: getKey(extra.sender),
+        temperature: 0.55,
+        maxOutputTokens: 700,
+      });
       await extra.reply(answer);
       
     } catch (error) {

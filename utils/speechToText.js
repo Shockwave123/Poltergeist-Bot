@@ -4,14 +4,19 @@
 
 const axios = require('axios');
 const FormData = require('form-data');
+const { generateContent } = require('./googleAi');
 
 const TRANSCRIPTION_URL = process.env.TRANSCRIPTION_URL || 'https://api.openai.com/v1/audio/transcriptions';
 const TRANSCRIPTION_MODEL = process.env.TRANSCRIPTION_MODEL || 'gpt-4o-mini-transcribe';
 
-async function transcribeAudio(audioBuffer, filename = 'voice.ogg', mimetype = 'audio/ogg') {
+async function transcribeAudio(audioBuffer, filename = 'voice.ogg', mimetype = 'audio/ogg', options = {}) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error('Speech-to-text is not configured. Add OPENAI_API_KEY to the bot environment.');
+    const text = await generateContent([
+      { text: 'Transcribe this voice note exactly. Return only the spoken words, without labels, commentary, or quotation marks.' },
+      { inlineData: { mimeType: mimetype, data: audioBuffer.toString('base64') } },
+    ], { maxOutputTokens: 500, timeout: 120000, apiKey: options.apiKey });
+    return text.trim();
   }
 
   const form = new FormData();

@@ -3,11 +3,10 @@
  * API: api.princetechn.com
  */
 
-const axios = require('axios');
 const config = require('../../config');
 const database = require('../../database');
 const { sendVoiceNote } = require('../../utils/voiceNote');
-const { getSetupMessage } = require('../../utils/googleAi');
+const { generateContent, getSetupMessage } = require('../../utils/googleAi');
 const { getKey } = require('../../utils/userApiKeys');
 
 const chatMemory = {
@@ -141,24 +140,13 @@ async function getAIResponse(userMessage, userContext) {
     `Current message: ${userMessage}`
   ].filter(Boolean).join(' ');
 
-  const apiKey = userContext.apiKey || process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error(getSetupMessage());
-
-  const res = await axios.post('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent', {
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: {
-      temperature: 0.85,
-      topP: 0.9,
-      maxOutputTokens: 120,
-    },
-  }, {
-    params: { key: userContext.apiKey || apiKey },
+  const reply = await generateContent([{ text: prompt }], {
+    apiKey: userContext.apiKey,
+    temperature: 0.85,
+    topP: 0.9,
+    maxOutputTokens: 120,
     timeout: 30000,
-    headers: { 'Content-Type': 'application/json' },
   });
-
-  const reply = res.data?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join(' ').trim();
-  if (!reply) throw new Error('Empty response');
   return cleanResponse(reply, userMessage);
 }
 

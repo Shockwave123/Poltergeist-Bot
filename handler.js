@@ -883,7 +883,7 @@ const handleMessage = async (sock, msg) => {
     // AFK — one-time reply when owner is away (groups + DMs)
     if (!msg.key.fromMe) {
       const afk = require('./utils/afk');
-      if (afk.isEnabled() && !isOwner(sender)) {
+      if (afk.isEnabled() && afk.isScopeEnabled(isGroup) && !isOwner(sender)) {
         let shouldHandleAfk = false;
 
         if (!isGroup) {

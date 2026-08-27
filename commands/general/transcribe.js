@@ -4,6 +4,7 @@
 
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { transcribeAudio } = require('../../utils/speechToText');
+const { getKey } = require('../../utils/userApiKeys');
 
 function getContextInfo(message) {
   return message.message?.extendedTextMessage?.contextInfo
@@ -53,6 +54,7 @@ module.exports = {
         audioBuffer,
         audioMessage.fileName || 'voice.ogg',
         audioMessage.mimetype || 'audio/ogg',
+        { apiKey: getKey(extra.sender) },
       );
 
       await extra.reply(`📝 ${text}`);

@@ -22,7 +22,8 @@ module.exports = {
         return extra.reply(
           `🔴 *AFK Mode*\n\n` +
           `Status: *${on ? 'ON' : 'OFF'}*\n\n` +
-          `Voice replies: *${afk.isVoiceEnabled() ? 'ON' : 'OFF'}*\n\n` +
+          `Voice replies: *${afk.isVoiceEnabled() ? 'ON' : 'OFF'}*\n` +
+          `Groups: *${afk.isScopeEnabled(true) ? 'ON' : 'OFF'}* | DMs: *${afk.isScopeEnabled(false) ? 'ON' : 'OFF'}*\n\n` +
           `When ON:\n` +
           `• *Groups* — one-time reply when someone @tags or replies to the bot\n` +
           `• *DMs* — one-time reply to any message\n` +
@@ -32,6 +33,9 @@ module.exports = {
           `  .afk on voice busy right now\n` +
           `  .afk voice on\n` +
           `  .afk voice off\n` +
+          `  .afk group on | .afk group off\n` +
+          `  .afk dm on | .afk dm off\n` +
+          `  .afk phrase I am away right now\n` +
           `  .afk off`
         );
       }
@@ -57,6 +61,23 @@ module.exports = {
         }
         afk.setVoiceEnabled(voiceOption === 'on');
         return extra.reply(`*AFK voice replies ${voiceOption === 'on' ? 'enabled' : 'disabled'}.*`);
+      }
+
+      if (opt === 'group' || opt === 'groups' || opt === 'dm' || opt === 'dms') {
+        const scopeOption = (args[1] || '').toLowerCase();
+        if (!['on', 'off'].includes(scopeOption)) {
+          return extra.reply(`❌ Use: .afk ${opt} on | .afk ${opt} off`);
+        }
+        const scope = opt.startsWith('g') ? 'groups' : 'dms';
+        afk.setScope(scope, scopeOption === 'on');
+        return extra.reply(`*AFK ${scope} replies ${scopeOption === 'on' ? 'enabled' : 'disabled'}.*`);
+      }
+
+      if (opt === 'phrase' || opt === 'message') {
+        const phrase = args.slice(1).join(' ').trim();
+        if (!phrase) return extra.reply('❌ Add the phrase after `.afk phrase`.');
+        afk.setMessage(phrase);
+        return extra.reply('*AFK reply phrase updated.*');
       }
 
       if (opt === 'off') {

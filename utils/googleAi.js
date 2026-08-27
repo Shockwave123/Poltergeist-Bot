@@ -22,18 +22,29 @@ function getSetupMessage() {
 }
 
 async function generateContent(parts, options = {}) {
-  const response = await axios.post(API_URL, {
+  const payload = {
     contents: [{ role: 'user', parts }],
     generationConfig: {
       temperature: options.temperature ?? 0.4,
       topP: options.topP ?? 0.9,
       maxOutputTokens: options.maxOutputTokens ?? 700,
     },
-  }, {
-    params: { key: getApiKey(options.apiKey) },
-    headers: { 'Content-Type': 'application/json' },
-    timeout: options.timeout || 90000,
-  });
+  };
+  let response;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      response = await axios.post(API_URL, payload, {
+        params: { key: getApiKey(options.apiKey) },
+        headers: { 'Content-Type': 'application/json' },
+        timeout: options.timeout || 90000,
+      });
+      break;
+    } catch (error) {
+      const retryable = !error.response || error.response.status === 408 || error.response.status === 429 || error.response.status >= 500;
+      if (attempt === 2 || !retryable) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+    }
+  }
 
   const text = response.data?.candidates?.[0]?.content?.parts
     ?.map((part) => part.text || '')

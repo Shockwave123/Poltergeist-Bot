@@ -1,6 +1,7 @@
 const APIs = require('./api');
 const { getStats, getWeeklyStats, rankUsers } = require('./groupstats');
 const { gameCommands } = require('./funGames');
+const { getKey } = require('./userApiKeys');
 const {
   tag,
   pick,
@@ -475,7 +476,7 @@ function makeAiCmd(name, aliases, usage, promptFn) {
       try {
         const prompt = promptFn(args, extra, msg);
         if (!prompt) return extra.reply(`❌ Usage: \`.${name} ${usage}\``);
-        const text = await askFunAi(prompt);
+        const text = await askFunAi(prompt, getKey(extra.sender));
         await extra.reply(text);
       } catch (e) {
         console.error(`[${name}]`, e.message);
@@ -507,7 +508,7 @@ const aiCommands = [
         const prompt = topic
           ? `Roast ${name} about "${topic}" in 2-3 funny savage lines. Use their name naturally. Keep it playful. Max 200 words.`
           : `Roast ${name} in 2-3 funny savage lines. Use their name naturally. Keep it playful. Max 200 words.`;
-        const roast = await askFunAi(prompt);
+        const roast = await askFunAi(prompt, getKey(extra.sender));
         await sock.sendMessage(extra.from, {
           text: `${targetTag}\n\n${roast}`,
           mentions: [targetId],
@@ -565,7 +566,7 @@ const aiCommands = [
         const hasImage = quoted && (quoted.imageMessage || quoted.stickerMessage || quoted.videoMessage);
         if (!hasImage) return extra.reply('❌ Reply to an image or video.');
         const hint = args.join(' ') || 'something funny and savage';
-        const text = await askFunAi(`Write one funny WhatsApp caption for a photo about: ${hint}. Max 2 lines. Plain text only.`);
+        const text = await askFunAi(`Write one funny WhatsApp caption for a photo about: ${hint}. Max 2 lines. Plain text only.`, getKey(extra.sender));
         await extra.reply(text.slice(0, 500));
       } catch (e) {
         console.error('[caption]', e.message);

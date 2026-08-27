@@ -10,6 +10,8 @@ const DB_PATH = path.join(__dirname, '../database');
 const AFK_FILE = path.join(DB_PATH, 'afk.json');
 
 const notifiedUsers = new Set();
+const notifiedAt = new Map();
+const REPEAT_COOLDOWN_MS = 60 * 60 * 1000;
 
 const DEFAULT_MESSAGE =
   '🔴 *AFK Mode ON*\n\nMy owner is currently offline. Please try again later.';
@@ -22,7 +24,7 @@ function loadState() {
   } catch (e) {
     console.error('[afk] load error:', e.message);
   }
-  return { enabled: false, message: DEFAULT_MESSAGE };
+  return { enabled: false, enabledGroups: false, enabledDMs: false, voice: false, message: DEFAULT_MESSAGE };
 }
 
 function saveState(state) {
@@ -53,8 +55,11 @@ function getMessage() {
 
 function setEnabled(enabled, customMessage) {
   notifiedUsers.clear();
+  notifiedAt.clear();
   const state = loadState();
   state.enabled = enabled;
+  if (enabled && state.enabledGroups === undefined) state.enabledGroups = true;
+  if (enabled && state.enabledDMs === undefined) state.enabledDMs = true;
   if (enabled && customMessage) {
     state.message = customMessage;
   } else if (!enabled) {
@@ -74,12 +79,38 @@ function setVoiceEnabled(enabled) {
   return saveState(state);
 }
 
+function setScope(scope, enabled) {
+  const state = loadState();
+  if (scope === 'groups') state.enabledGroups = enabled === true;
+  if (scope === 'dms') state.enabledDMs = enabled === true;
+  state.enabled = state.enabledGroups === true || state.enabledDMs === true;
+  notifiedUsers.clear();
+  notifiedAt.clear();
+  return saveState(state);
+}
+
+function setMessage(message) {
+  const state = loadState();
+  state.message = String(message || '').trim() || DEFAULT_MESSAGE;
+  return saveState(state);
+}
+
+function isScopeEnabled(isGroup) {
+  const state = loadState();
+  if (!state.enabled) return false;
+  if (isGroup) return state.enabledGroups !== false;
+  return state.enabledDMs !== false;
+}
+
 function shouldNotify(chatId, senderId) {
-  return !notifiedUsers.has(notifyKey(chatId, senderId));
+  const key = notifyKey(chatId, senderId);
+  const last = notifiedAt.get(key);
+  return !last || Date.now() - last >= REPEAT_COOLDOWN_MS;
 }
 
 function markNotified(chatId, senderId) {
   notifiedUsers.add(notifyKey(chatId, senderId));
+  notifiedAt.set(notifyKey(chatId, senderId), Date.now());
 }
 
 module.exports = {
@@ -88,6 +119,9 @@ module.exports = {
   setEnabled,
   isVoiceEnabled,
   setVoiceEnabled,
+  setScope,
+  setMessage,
+  isScopeEnabled,
   shouldNotify,
   markNotified,
   DEFAULT_MESSAGE,
