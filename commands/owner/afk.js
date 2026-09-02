@@ -47,7 +47,7 @@ module.exports = {
         const voice = (args[1] || '').toLowerCase() === 'voice';
         const customMsg = args.slice(voice ? 2 : 1).join(' ').trim();
         const message = customMsg
-          ? `🔴 *AFK Mode ON*\n\n${customMsg}`
+          ? customMsg
           : afk.DEFAULT_MESSAGE;
         afk.setEnabled(true, message);
         afk.setVoiceEnabled(voice);

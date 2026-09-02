@@ -18,7 +18,7 @@ function isConfigured() {
 }
 
 function getSetupMessage() {
-  return 'Google AI is not configured. Get a key at https://aistudio.google.com/app/apikey, then add GOOGLE_AI_API_KEY to the bot environment (PowerShell: $env:GOOGLE_AI_API_KEY="your_key"; hosting: add it under Environment Variables). Restart the bot afterward. Never send the key in WhatsApp chat.';
+  return 'Google AI is not configured. In a private chat, get a key at https://aistudio.google.com/app/apikey, then send `.googleai set YOUR_KEY`. Never post the key in a group or share it with anyone.';
 }
 
 async function generateContent(parts, options = {}) {

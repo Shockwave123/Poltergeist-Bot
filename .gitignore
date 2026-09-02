@@ -1,5 +1,7 @@
 node_modules/
 .env
 database/googleKeys.json
+database/reminders.json
+database/.user-key-secret
 auth_info_baileys/
 session/

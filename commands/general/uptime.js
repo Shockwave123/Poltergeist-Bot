@@ -3,6 +3,7 @@
  */
 
 const config = require('../../config');
+const packageInfo = require('../../package.json');
 
 /**
  * Format time difference into human-readable string
@@ -52,7 +53,7 @@ module.exports = {
       
 // Get bot info
 const botName = config.botName || 'Bot';
-const botVersion = 'V1.0.3';
+const botVersion = `V${packageInfo.version}`;
       
       // Build response message
       let message = `╭━━『 *Bot Uptime* 』━━╮\n\n`;

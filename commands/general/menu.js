@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const config = require('../../config');
+const packageInfo = require('../../package.json');
 const { loadCommands } = require('../../utils/commandLoader');
 
 const categoryLabels = {
@@ -19,6 +20,7 @@ const categoryLabels = {
   utility: '🔧 UTILITY',
   textmaker: '🖋️ TEXTMAKER'
 };
+const categoryOrder = ['general', 'ai', 'anime', 'media', 'fun', 'economy', 'utility', 'textmaker', 'admin', 'owner'];
 
 const getUniqueCommands = (commands) => {
   const uniqueCommands = new Map();
@@ -54,7 +56,11 @@ module.exports = {
       menuText += `📦 Total Commands: ${commands.length}\n`;
       menuText += `👑 Owner: ${displayOwner}\n\n`;
 
-      Object.keys(categories).sort().forEach((category) => {
+      Object.keys(categories).sort((first, second) => {
+        const firstIndex = categoryOrder.indexOf(first);
+        const secondIndex = categoryOrder.indexOf(second);
+        return (firstIndex === -1 ? categoryOrder.length : firstIndex) - (secondIndex === -1 ? categoryOrder.length : secondIndex);
+      }).forEach((category) => {
         const label = categoryLabels[category] || `📂 ${category.toUpperCase()}`;
         menuText += `┏━━━━━━━━━━━━━━━━━\n`;
         menuText += `┃ ${label} COMMANDS\n`;
@@ -69,7 +75,7 @@ module.exports = {
 
       menuText += `╰━━━━━━━━━━━━━━━━━\n\n`;
       menuText += `💡 Type ${config.prefix}help for command descriptions and usage.\n`;
-      menuText += `🌟 Bot Version: 1.0.3\n`;
+      menuText += `🌟 Bot Version: ${packageInfo.version}\n`;
 
       const imagePath = path.join(__dirname, '../../utils/bot_image.jpg');
       if (fs.existsSync(imagePath)) {

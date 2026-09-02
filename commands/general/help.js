@@ -13,6 +13,7 @@ const permissionLabels = [
   ['privateOnly', 'Private chat only'],
   ['botAdminNeeded', 'Bot must be admin']
 ];
+const categoryOrder = ['general', 'ai', 'anime', 'media', 'fun', 'economy', 'utility', 'textmaker', 'admin', 'owner'];
 
 module.exports = {
   name: 'help',
@@ -37,7 +38,11 @@ module.exports = {
       helpText += `Prefix: *${config.prefix}*\n`;
       helpText += `Total commands: *${uniqueCommands.size}*\n\n`;
 
-      Object.keys(categories).sort().forEach((category) => {
+      Object.keys(categories).sort((first, second) => {
+        const firstIndex = categoryOrder.indexOf(first);
+        const secondIndex = categoryOrder.indexOf(second);
+        return (firstIndex === -1 ? categoryOrder.length : firstIndex) - (secondIndex === -1 ? categoryOrder.length : secondIndex);
+      }).forEach((category) => {
         helpText += `*📂 ${category.toUpperCase()}*\n`;
         categories[category].sort((first, second) => first.name.localeCompare(second.name));
         categories[category].forEach((command) => {

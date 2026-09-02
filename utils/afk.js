@@ -14,7 +14,7 @@ const notifiedAt = new Map();
 const REPEAT_COOLDOWN_MS = 60 * 60 * 1000;
 
 const DEFAULT_MESSAGE =
-  '🔴 *AFK Mode ON*\n\nMy owner is currently offline. Please try again later.';
+  'This Poltergeist is currently offline. Please try again later.';
 
 function loadState() {
   try {

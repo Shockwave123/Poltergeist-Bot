@@ -76,7 +76,18 @@ let latestQrDataUrl = null;
 let latestPairingCode = null;
 let setupStatus = 'Starting bot...';
 let pairingRequestAt = 0;
+let pairingInFlight = false;
+let pairingReadyAt = 0;
 let welcomeSent = false;
+
+const normalizePhoneNumber = (value) => {
+  let phoneNumber = String(value || '').trim().replace(/[^0-9]/g, '');
+  if (phoneNumber.startsWith('00')) phoneNumber = phoneNumber.slice(2);
+  if (!/^\d{8,15}$/.test(phoneNumber)) {
+    throw new Error('Enter 8 to 15 digits with the country code, for example 2348012345678.');
+  }
+  return phoneNumber;
+};
 
 const escapeHtml = (value) => String(value)
   .replace(/&/g, '&amp;')
@@ -168,9 +179,9 @@ const startSetupServer = () => {
       request.on('data', (chunk) => { body += chunk; });
       request.on('end', async () => {
         try {
-          const phoneNumber = String(JSON.parse(body).phoneNumber || '').replace(/\D/g, '');
-          if (!/^\d{8,15}$/.test(phoneNumber)) {
-            throw new Error('Enter 8 to 15 digits, including the country code.');
+          const phoneNumber = normalizePhoneNumber(JSON.parse(body).phoneNumber);
+          if (pairingInFlight) {
+            throw new Error('A pairing request is already being processed. Please wait.');
           }
           if (Date.now() - pairingRequestAt < 15000) {
             throw new Error('Please wait 15 seconds before requesting another pairing code.');
@@ -178,11 +189,22 @@ const startSetupServer = () => {
           if (!activeSocket || activeAuthState?.creds?.registered) {
             throw new Error('Pairing is unavailable because the bot is already connected or still starting.');
           }
+          if (Date.now() < pairingReadyAt) {
+            throw new Error('WhatsApp pairing is still initializing. Wait a few seconds and try again.');
+          }
+          if (activeSocket.ws?.readyState !== undefined && activeSocket.ws.readyState !== 1) {
+            throw new Error('WhatsApp connection is still starting. Wait a few seconds and try again.');
+          }
           pairingRequestAt = Date.now();
-          latestPairingCode = await activeSocket.requestPairingCode(phoneNumber);
-          setupStatus = 'Pairing code generated.';
-          response.writeHead(200, { 'content-type': 'application/json' });
-          response.end(JSON.stringify({ code: latestPairingCode }));
+          pairingInFlight = true;
+          try {
+            latestPairingCode = await activeSocket.requestPairingCode(phoneNumber);
+            setupStatus = 'Pairing code generated.';
+            response.writeHead(200, { 'content-type': 'application/json' });
+            response.end(JSON.stringify({ code: latestPairingCode }));
+          } finally {
+            pairingInFlight = false;
+          }
         } catch (error) {
           response.writeHead(400, { 'content-type': 'application/json' });
           response.end(JSON.stringify({ error: error.message || 'Unable to generate pairing code.' }));
@@ -398,6 +420,8 @@ async function startBot() {
   });
   activeSocket = sock;
   activeAuthState = state;
+  require('./commands/general/reminder').setSocket(sock);
+  pairingReadyAt = Date.now() + 5000;
   latestPairingCode = null;
   latestQrDataUrl = null;
   setupStatus = state.creds.registered ? 'Authenticated.' : 'Waiting for QR scan or pairing code.';

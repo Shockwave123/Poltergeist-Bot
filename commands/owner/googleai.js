@@ -11,6 +11,7 @@ module.exports = {
   category: 'owner',
   description: 'Check Google AI setup instructions and status',
   usage: '.googleai',
+  privateOnly: true,
   async execute(sock, msg, args, extra) {
     const option = (args[0] || '').toLowerCase();
     const userId = extra.sender;
@@ -39,7 +40,7 @@ module.exports = {
     return extra.reply(
       `*GOOGLE AI STATUS*\n\n${status}\n\n` +
       (status === '✅ Configured' ? 'Your AI features are ready to use.' : getSetupMessage()) +
-      '\n\nSet your own key: `.googleai set YOUR_KEY`\nRemove it: `.googleai remove`'
+      '\n\nUse this command in a private chat.\nSet your own key: `.googleai set YOUR_KEY`\nRemove it: `.googleai remove`'
     );
   },
 };
