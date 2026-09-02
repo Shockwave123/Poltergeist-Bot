@@ -11,7 +11,7 @@ const ALGORITHM = 'aes-256-gcm';
 
 function getEncryptionKey() {
   const secret = process.env.USER_KEYS_ENCRYPTION_KEY;
-  if (!secret) throw new Error('USER_KEYS_ENCRYPTION_KEY is not configured on Render.');
+  if (!secret) throw new Error('USER_KEYS_ENCRYPTION_KEY environment variable is not set.');
   return crypto.createHash('sha256').update(secret).digest();
 }
 
