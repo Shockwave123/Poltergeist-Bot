@@ -4,8 +4,11 @@
 
 const axios = require('axios');
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
-const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+const MODELS = [
+  process.env.GEMINI_MODEL,
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+].filter((model, index, models) => model && models.indexOf(model) === index);
 
 function getApiKey(userKey) {
   const key = userKey || process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY;
@@ -31,19 +34,33 @@ async function generateContent(parts, options = {}) {
     },
   };
   let response;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      response = await axios.post(API_URL, payload, {
-        params: { key: getApiKey(options.apiKey) },
-        headers: { 'Content-Type': 'application/json' },
-        timeout: options.timeout || 90000,
-      });
-      break;
-    } catch (error) {
-      const retryable = !error.response || error.response.status === 408 || error.response.status === 429 || error.response.status >= 500;
-      if (attempt === 2 || !retryable) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+  let lastError;
+  for (const model of MODELS) {
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        response = await axios.post(apiUrl, payload, {
+          params: { key: getApiKey(options.apiKey) },
+          headers: { 'Content-Type': 'application/json' },
+          timeout: options.timeout || 90000,
+        });
+        break;
+      } catch (error) {
+        lastError = error;
+        if (error.response?.status === 404) break;
+        const retryable = !error.response || error.response.status === 408 || error.response.status === 429 || error.response.status >= 500;
+        if (attempt === 2 || !retryable) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+      }
     }
+    if (response) break;
+  }
+
+  if (!response) {
+    if (lastError?.response?.status === 404) {
+      throw new Error(`No configured Gemini model is available. Tried: ${MODELS.join(', ')}. Set GEMINI_MODEL to a supported model.`);
+    }
+    throw lastError || new Error('Google AI request failed.');
   }
 
   const text = response.data?.candidates?.[0]?.content?.parts
