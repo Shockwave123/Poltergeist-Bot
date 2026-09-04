@@ -192,12 +192,16 @@ const startSetupServer = () => {
           if (Date.now() < pairingReadyAt) {
             throw new Error('WhatsApp pairing is still initializing. Wait a few seconds and try again.');
           }
-          if (activeSocket.ws?.readyState !== undefined && activeSocket.ws.readyState !== 1) {
+          if (activeSocket.ws?.readyState !== undefined && activeSocket.ws.readyState !== 1 && activeSocket.ws.readyState !== 0) {
             throw new Error('WhatsApp connection is still starting. Wait a few seconds and try again.');
           }
           pairingRequestAt = Date.now();
           pairingInFlight = true;
           try {
+            // Check if socket is actually connected
+            if (!activeSocket.ws || (activeSocket.ws.readyState !== 1 && activeSocket.ws.readyState !== 0)) {
+               throw new Error('Socket is not connected. Please refresh and wait for QR to appear first.');
+            }
             latestPairingCode = await activeSocket.requestPairingCode(phoneNumber);
             setupStatus = 'Pairing code generated.';
             response.writeHead(200, { 'content-type': 'application/json' });
