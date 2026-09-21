@@ -6,17 +6,17 @@ module.exports = {
     // Bot Owner Configuration
     ownerNumber: process.env.OWNER_NUMBER
       ? String(process.env.OWNER_NUMBER)
-          .split(',')
+          .split('.')
           .map((num) => String(num).replace(/\D/g, ''))
           .filter(Boolean)
-      : [], // If empty, the bot automatically adopts the connected WhatsApp line as owner
+      : [''], // Add your number without + or spaces (e.g., 919876543210)
     ownerName: process.env.OWNER_NAME
       ? String(process.env.OWNER_NAME).split(',').map((name) => name.trim())
       : ['Owner'], // Owner names corresponding to ownerNumber array
     
     // Bot Configuration
     botName: 'Poltergeist MD',
-    prefix: ',',
+    prefix: '.',
     sessionName: 'session',
     sessionID: process.env.SESSION_ID || '',
     newsletterJid: '120363161513685998@newsletter', // Newsletter JID for menu forwarding
