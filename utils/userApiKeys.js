@@ -51,7 +51,6 @@ function decrypt(value) {
   return Buffer.concat([decipher.update(Buffer.from(encryptedText, 'base64')), decipher.final()]).toString('utf8');
 }
 
-<<<<<<< HEAD
 function detectProvider(key) {
   if (!key || typeof key !== 'string') return 'gemini';
   const cleanKey = key.trim();
@@ -73,18 +72,11 @@ function setKey(userId, key, provider = null) {
   data[userId] = encrypt(payload);
   write(data);
   return { key: cleanKey, provider: resolvedProvider };
-=======
-function setKey(userId, key) {
-  const data = read();
-  data[userId] = encrypt(key);
-  write(data);
->>>>>>> b2a8eb0b338d123d7b02d51698cdb5bd1799e037
 }
 
 function getKey(userId) {
   const value = read()[userId];
   if (!value) return null;
-<<<<<<< HEAD
   try {
     const decrypted = decrypt(value);
     try {
@@ -125,9 +117,6 @@ function getUserAiConfig(userId) {
     console.error('[userApiKeys] Decryption error:', err.message);
     return null;
   }
-=======
-  return decrypt(value);
->>>>>>> b2a8eb0b338d123d7b02d51698cdb5bd1799e037
 }
 
 function removeKey(userId) {
@@ -136,7 +125,6 @@ function removeKey(userId) {
   write(data);
 }
 
-<<<<<<< HEAD
 module.exports = {
   setKey,
   getKey,
@@ -144,6 +132,3 @@ module.exports = {
   removeKey,
   detectProvider
 };
-=======
-module.exports = { setKey, getKey, removeKey };
->>>>>>> b2a8eb0b338d123d7b02d51698cdb5bd1799e037
