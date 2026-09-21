@@ -9,7 +9,7 @@ module.exports = {
           .split('.')
           .map((num) => String(num).replace(/\D/g, ''))
           .filter(Boolean)
-      : [''], // Add your number without + or spaces (e.g., 919876543210)
+      : ['2349131095067'], // Add your number without + or spaces (e.g., 919876543210)
     ownerName: process.env.OWNER_NAME
       ? String(process.env.OWNER_NAME).split(',').map((name) => name.trim())
       : ['Owner'], // Owner names corresponding to ownerNumber array
