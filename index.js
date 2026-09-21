@@ -122,10 +122,13 @@ const setupPage = () => `<!doctype html>
     ${latestQrDataUrl ? `<img src="${latestQrDataUrl}" alt="WhatsApp QR code">` : '<p>The QR code will appear here while the bot is waiting for authentication.</p>'}
     <h2>Option 2: Pairing code</h2>
     <p>Enter the WhatsApp number with country code, without <code>+</code>, spaces, or punctuation.</p>
+<<<<<<< HEAD
     <p style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:10px;font-size:0.92em;">
       \uD83D\uDCF2 After you click <strong>Generate pairing code</strong>, WhatsApp will send a <strong>device-link notification</strong>
       to that phone number. Open WhatsApp on that phone, accept the notification, and enter the code shown below.
     </p>
+=======
+>>>>>>> b2a8eb0b338d123d7b02d51698cdb5bd1799e037
     <form id="pair-form">
       <input name="phoneNumber" inputmode="numeric" placeholder="e.g. 2348012345678" required pattern="[0-9]{8,15}">
       <button type="submit">Generate pairing code</button>
@@ -135,6 +138,7 @@ const setupPage = () => `<!doctype html>
   </main>
   <script>
     const refreshSetup = async () => {
+<<<<<<< HEAD
       try {
         const response = await fetch('/api/status');
         const data = await response.json();
@@ -145,11 +149,22 @@ const setupPage = () => `<!doctype html>
           else location.reload();
         }
       } catch (e) { /* ignore during reload */ }
+=======
+      const response = await fetch('/api/status');
+      const data = await response.json();
+      document.querySelector('.muted:last-child').textContent = 'Status: ' + data.status;
+      if (data.qr) {
+        const image = document.querySelector('img[alt="WhatsApp QR code"]');
+        if (image) image.src = data.qr;
+        else location.reload();
+      }
+>>>>>>> b2a8eb0b338d123d7b02d51698cdb5bd1799e037
     };
     setInterval(refreshSetup, 5000);
     document.querySelector('#pair-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       const result = document.querySelector('#result');
+<<<<<<< HEAD
       result.innerHTML = '<span style="color:#555">\u23F3 Requesting code \u2014 please wait\u2026</span>';
       const phoneNumber = new FormData(event.target).get('phoneNumber');
       try {
@@ -168,6 +183,13 @@ const setupPage = () => `<!doctype html>
       } catch (e) {
         result.innerHTML = '<span style="color:#c0392b">\u274C Network error. Please try again.</span>';
       }
+=======
+      result.textContent = 'Requesting code...';
+      const phoneNumber = new FormData(event.target).get('phoneNumber');
+      const response = await fetch('/api/pair', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phoneNumber }) });
+      const data = await response.json();
+      result.textContent = data.error || ('Pairing code: ' + data.code);
+>>>>>>> b2a8eb0b338d123d7b02d51698cdb5bd1799e037
     });
   </script>
 </body>

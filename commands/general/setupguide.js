@@ -52,11 +52,36 @@ ${globalKey ? '✅ Bot has a global fallback API key.' : '❌ Bot has no global 
 ───────────────────────────────────────────────────────────────
 *STEP 3: Verify It Works*
 
+<<<<<<< HEAD
 Try any of these AI commands:
 • ${extra.prefix || '.'}ai What is the speed of light?
 • ${extra.prefix || '.'}deepread (reply to an image/doc with a question)
 • ${extra.prefix || '.'}summary 100 (summarize last 100 messages in group)
 • ${extra.prefix || '.'}aikey test (run diagnostic test)
+=======
+Try one of these AI features:
+
+• .ai What is the capital of France?
+• .deepread (reply to an image and ask a question)
+• .summary 200 (in a group, summarize the last 200 messages)
+• .roastai @someone
+• .transcribe (reply to a voice note)
+
+───────────────────────────────────────────────────────────────
+*TROUBLESHOOTING*
+
+❌ "Key normally starts with AIza or AQ"?
+   → Your key format is invalid. Double-check you copied it fully.
+
+❌ "Google AI is not configured"?
+   → You need EITHER a personal key OR the bot owner needs a global key.
+   → Try: .googleai set YOUR_KEY
+
+❌ Still not working?
+   → The key might be expired or have no free quota left.
+   → Create a new key in Google AI Studio.
+   → Revoke old keys you don't use.
+>>>>>>> b2a8eb0b338d123d7b02d51698cdb5bd1799e037
 
 ───────────────────────────────────────────────────────────────
 *MANAGE YOUR KEY*
