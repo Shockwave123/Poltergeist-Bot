@@ -58,6 +58,9 @@ module.exports = {
       const memoryLimit = config.health.memoryLimitMb;
       const memoryPercent = Math.round((stats.memoryMb / memoryLimit) * 100);
 
+      const linkState = stats.linked ? '✅ linked' : '❌ not linked';
+      const socketState = stats.connected ? 'online' : 'offline';
+
       const aiLine = ai.configured
         ? `${ai.totalKeys} key(s) - ${ai.entries.filter((entry) => entry.status === 'ready').length} ready, ${ai.entries.filter((entry) => entry.status === 'cooling-down').length} cooling down`
         : '❌ no keys configured';
@@ -66,7 +69,7 @@ module.exports = {
         '╭───『 🩺 *BOT HEALTH* 』───',
         '│',
         '│ 🔌 *CONNECTION*',
-        `│ • State: ${stats.connected ? '✅ connected' : '⚠️ not connected'}`,
+        `│ • State: ${linkState} (socket ${socketState})`,
         `│ • Linked via: *${stats.authMethod || 'unknown'}*`,
         `│ • Session stored: ${session.hasSession ? '✅ yes' : '❌ no'}`,
         `│ • Reconnects this run: ${stats.reconnects}`,

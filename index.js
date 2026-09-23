@@ -133,6 +133,7 @@ const connectionStats = () => ({
   uptimeSeconds: Math.round((Date.now() - BOT_STARTED_AT) / 1000),
   socketOpenedAt,
   connected: Boolean(activeSocket && isSocketOpen(activeSocket)),
+  linked: Boolean(activeAuthState?.creds?.registered),
   reconnects: reconnectCount,
   reconnectAttempts,
   lastDisconnectReason,
@@ -192,20 +193,32 @@ const setupPage = () => `<!doctype html>
     .code { font-size: 2em; letter-spacing: 0.22em; font-weight: 700; color: #1b5e20; font-family: monospace; }
     .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .small { font-size: 0.86em; }
+    .banner { padding: 14px 16px; border-radius: 8px; font-size: 1.05em; margin: 12px 0 18px; border: 1px solid transparent; }
+    .banner strong { font-weight: 800; letter-spacing: 0.04em; }
+    .banner.okc { background: #e8f5e9; border-color: #a5d6a7; color: #1b5e20; }
+    .banner.waitc { background: #fff8e1; border-color: #ffe082; color: #7a5b00; }
+    .banner.downc { background: #ffebee; border-color: #ef9a9a; color: #b71c1c; }
+    .timer { font-weight: 800; font-size: 1.12em; font-family: monospace; padding: 8px 12px; border-radius: 6px; display: inline-block; margin: 6px 0; }
+    .timer.qrt { background: #e3f2fd; color: #0d47a1; border: 1px solid #90caf9; }
+    .timer.pt { background: #f3e5f5; color: #4a148c; border: 1px solid #ce93d8; }
+    .timer.done { background: #eceff1; color: #546e7a; border-color: #cfd8dc; font-weight: 600; }
   </style>
 </head>
 <body>
   <main>
     <h1>${escapeHtml(config.botName)} connection</h1>
+    <div id="conn-banner" class="banner waitc"><strong>⏳ CONNECTING...</strong> &mdash; fetching live status from the bot.</div>
     <p class="muted">Choose one method to connect this deployment to WhatsApp. This page refreshes itself every few seconds.</p>
 
     <h2>Option 1: QR code</h2>
     <p>Open WhatsApp on your phone, go to Linked devices, choose Link a device, then scan the code below.</p>
     <img id="qr" alt="WhatsApp QR code" src="${latestQrDataUrl || ''}" style="${latestQrDataUrl ? 'display:block' : 'display:none'}">
     <p class="muted small" id="qr-info">Loading connection state...</p>
+    <div><span class="timer qrt" id="qr-timer">QR refresh in --</span></div>
 
     <h2>Option 2: Pairing code</h2>
     <p>Enter the WhatsApp number with country code, without <code>+</code>, spaces, or punctuation.</p>
+    <div><span class="timer pt" id="pair-timer">No pairing code active</span></div>
     <p class="note">
       After you click <strong>Generate pairing code</strong>, WhatsApp sends a <strong>device-link notification</strong>
       to that phone number. Open WhatsApp on that phone, open Linked devices, choose
@@ -273,11 +286,34 @@ const setupPage = () => `<!doctype html>
         if (!data) { return; }
         statusEl.textContent = 'Status: ' + esc(data.status);
 
+        // 1) Bold live connection banner — always mirrors the bot's current state
+        var banner = document.getElementById('conn-banner');
+        if (banner) {
+          if (data.linked) {
+            banner.className = 'banner okc';
+            banner.innerHTML = '<strong>\u2705 CONNECTED</strong> &mdash; bot is linked' +
+              (data.botNumber ? ' as <strong>+' + esc(data.botNumber) + '</strong>' : '') +
+              ' and online.';
+          } else if (data.pairingActive) {
+            banner.className = 'banner waitc';
+            banner.innerHTML = '<strong>\u23F3 WAITING FOR PAIRING CODE</strong> &mdash; enter the code on your phone to finish linking.';
+          } else if (data.qr) {
+            banner.className = 'banner waitc';
+            banner.innerHTML = '<strong>\u23F3 WAITING FOR QR SCAN</strong> &mdash; scan the code below with your phone.';
+          } else if (data.connected) {
+            banner.className = 'banner waitc';
+            banner.innerHTML = '<strong>\u23F3 CONNECTING...</strong> &mdash; socket is open, waiting for WhatsApp to issue a code.';
+          } else {
+            banner.className = 'banner downc';
+            banner.innerHTML = '<strong>\u26D4 NOT CONNECTED</strong> &mdash; ' + esc(data.status || 'waiting for the bot...');
+          }
+        }
+
         if (data.qr) {
           if (qrImg.getAttribute('src') !== data.qr) { qrImg.setAttribute('src', data.qr); }
           qrImg.style.display = 'block';
         }
-        if (data.connected) {
+        if (data.linked) {
           qrInfo.textContent = 'Connected as ' + (data.botNumber || 'unknown') + '. The QR code is no longer needed.';
         } else if (data.qr) {
           qrInfo.textContent = 'Newest QR code generated ' + (data.qrAgeSeconds === null ? 'just now' : data.qrAgeSeconds + 's ago') +
@@ -285,6 +321,43 @@ const setupPage = () => `<!doctype html>
         } else {
           qrInfo.textContent = 'Waiting for a fresh QR code from WhatsApp...';
         }
+
+        // 2a) Bold countdown timer for the QR code option
+        var qrTimer = document.getElementById('qr-timer');
+        if (qrTimer) {
+          if (data.linked) {
+            qrTimer.className = 'timer qrt done';
+            qrTimer.textContent = 'QR retired \u2014 bot is connected';
+          } else if (typeof data.qrRefreshSeconds === 'number') {
+            qrTimer.className = 'timer qrt';
+            qrTimer.textContent = 'QR refreshes in ' + data.qrRefreshSeconds + 's';
+          } else {
+            qrTimer.className = 'timer qrt done';
+            qrTimer.textContent = 'Preparing a fresh QR...';
+          }
+        }
+
+        // 2b) Bold countdown timer for the phone-number pairing option
+        var pairTimerEl = document.getElementById('pair-timer');
+        if (pairTimerEl) {
+          if (data.linked) {
+            pairTimerEl.className = 'timer pt done';
+            pairTimerEl.textContent = 'Pairing finished \u2014 bot is connected';
+          } else if (data.pairing && data.pairing.code) {
+            pairTimerEl.className = 'timer pt';
+            pairTimerEl.textContent = 'Code expires in ' + (data.pairing.expiresInSeconds || 0) + 's';
+          } else {
+            pairTimerEl.className = 'timer pt done';
+            pairTimerEl.textContent = 'No pairing code active';
+          }
+        }
+
+        // Smooth 1s local tick: remember server values so the countdowns
+        // move every second instead of every poll (3s).
+        qrCountdown = (typeof data.qrRefreshSeconds === 'number' && !data.linked)
+          ? data.qrRefreshSeconds : null;
+        pairCountdown = (data.linked || !data.pairing || !data.pairing.code)
+          ? null : (data.pairing.expiresInSeconds || 0);
 
         if (data.sessionReady) {
           sessionBox.style.display = 'block';
@@ -340,6 +413,27 @@ const setupPage = () => `<!doctype html>
 
       refresh();
       setInterval(refresh, 3000);
+
+      // Local 1s tick so both countdowns move smoothly between polls
+      var qrCountdown = null;
+      var pairCountdown = null;
+      setInterval(function () {
+        var qrEl = document.getElementById('qr-timer');
+        if (qrEl && qrCountdown !== null) {
+          qrCountdown = Math.max(0, qrCountdown - 1);
+          qrEl.textContent = qrCountdown > 0
+            ? 'QR refreshes in ' + qrCountdown + 's'
+            : 'Refreshing QR now...';
+        }
+        var ptEl = document.getElementById('pair-timer');
+        if (ptEl && pairCountdown !== null) {
+          pairCountdown = Math.max(0, pairCountdown - 1);
+          ptEl.textContent = pairCountdown > 0
+            ? 'Code expires in ' + pairCountdown + 's'
+            : 'Code expired \u2014 request a new one';
+          if (pairCountdown === 0) pairCountdown = null;
+        }
+      }, 1000);
     })();
   </script>
 </body>
@@ -357,6 +451,7 @@ const startSetupServer = () => {
         ok: true,
         status: setupStatus,
         connected: stats.connected,
+        linked: stats.linked,
         authMethod: stats.authMethod,
         reconnects: stats.reconnects,
         uptimeSeconds: stats.uptimeSeconds,
@@ -375,11 +470,21 @@ const startSetupServer = () => {
         status: setupStatus,
         qr: latestQrDataUrl,
         qrAgeSeconds: latestQrIssuedAt ? Math.round((Date.now() - latestQrIssuedAt) / 1000) : null,
+        // Countdown data for the QR refresh timer
+        qrRefreshTimeoutSeconds: Math.round(config.health.qrRefreshTimeoutMs / 1000),
+        // Countdown is valid whenever a QR was issued and we are not registered,
+        // regardless of the socket's transient open/closing state during refresh.
+        qrRefreshSeconds: (latestQrIssuedAt && !activeAuthState?.creds?.registered)
+          ? Math.max(0, Math.round(config.health.qrRefreshTimeoutMs / 1000) - Math.round((Date.now() - latestQrIssuedAt) / 1000))
+          : null,
         connected: isSocketOpen(activeSocket),
+        linked: Boolean(activeAuthState?.creds?.registered),
         botNumber: activeSocket?.user?.id ? activeSocket.user.id.split(':')[0].split('@')[0] : null,
         authMethod,
         sessionReady: session.hasSession,
         sessionPreview: session.sessionPreview,
+        // Countdown data for the phone-number pairing timer
+        pairingActive,
         pairing: pairingActive ? {
           phoneNumber: pendingPairingPhone,
           code: latestPairingCode,
