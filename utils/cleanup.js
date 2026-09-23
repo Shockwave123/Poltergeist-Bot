@@ -111,16 +111,8 @@ function stopCleanup() {
   }
 }
 
-// Handle process termination gracefully
-process.on('SIGINT', () => {
-  stopCleanup();
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  stopCleanup();
-  process.exit(0);
-});
+// Signal handling lives in index.js so the bot can save its session and shut the
+// socket down cleanly before exiting (see the graceful shutdown section there).
 
 module.exports = {
   cleanupOldFiles,

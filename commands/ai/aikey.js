@@ -3,15 +3,51 @@
  * Allows users to set, test, or remove their personal Google Gemini or OpenRouter API key.
  */
 
-const { isConfigured, getSetupMessage, testAiKey, resolveAiCredentials } = require('../../utils/googleAi');
+const { isConfigured, getSetupMessage, testAiKey, resolveAiCredentials, getAiHealth } = require('../../utils/googleAi');
 const { getUserAiConfig, setKey, removeKey, detectProvider } = require('../../utils/userApiKeys');
+
+/** Human readable failover / key-health block used by the status card. */
+const buildHealthBlock = (prefix) => {
+  const health = getAiHealth();
+  if (!health.configured) {
+    return [
+      '├─『 ⚠️ *FAILOVER* 』──',
+      '│ No global keys configured yet.',
+      '│ Add GEMINI_API_KEY and/or OPENROUTER_API_KEY so the bot',
+      '│ can switch providers automatically when one is offline.',
+      '│'
+    ].join('\n');
+  }
+
+  const lines = [
+    '├─『 🔁 *FAILOVER STATUS* 』──',
+    `│ Priority: *${health.priority.join(' → ')}*`,
+    `│ Keys: ${health.geminiKeys} Gemini, ${health.openrouterKeys} OpenRouter`,
+  ];
+
+  health.entries.forEach((entry) => {
+    const state = entry.status === 'ready'
+      ? '✅ ready'
+      : entry.status === 'cooling-down'
+        ? `⏳ cooling down (${entry.cooldownSeconds}s)`
+        : '♻️ recovering';
+    lines.push(`│ • ${entry.label} (${entry.source}) ${entry.keyId} - ${state}`);
+    if (entry.status === 'cooling-down' && entry.lastError) {
+      lines.push(`│   ↳ ${String(entry.lastError).slice(0, 70)}`);
+    }
+  });
+
+  lines.push('│ Gemini and OpenRouter cover for each other automatically.');
+  lines.push('│');
+  return lines.join('\n');
+};
 
 module.exports = {
   name: 'aikey',
-  aliases: ['googleai', 'gemini', 'openrouter', 'aiconfig', 'setkey'],
+  aliases: ['googleai', 'gemini', 'openrouter', 'aiconfig', 'setkey', 'aistatus'],
   category: 'ai',
   description: 'Manage your personal Google Gemini or OpenRouter API key',
-  usage: '.aikey | .aikey set <key> | .aikey test | .aikey remove',
+  usage: '.aikey | .aikey set <key> | .aikey test | .aikey status | .aikey remove',
 
   async execute(sock, msg, args, extra) {
     const action = (args[0] || '').toLowerCase();
@@ -110,6 +146,7 @@ module.exports = {
     // 4. STATUS / GUIDE
     const personalConf = getUserAiConfig(userId);
     const hasGlobal = isConfigured();
+    const health = getAiHealth();
 
     let personalStatus = '❌ None saved';
     if (personalConf && personalConf.key) {
@@ -117,16 +154,19 @@ module.exports = {
       personalStatus = '✅ ' + pName + ' (Personal)';
     }
 
-    let globalStatus = hasGlobal ? '✅ Active' : '❌ None';
+    const globalStatus = hasGlobal
+      ? `✅ ${health.geminiKeys} Gemini + ${health.openrouterKeys} OpenRouter key(s)`
+      : '❌ None';
     const overallReady = Boolean(personalConf?.key || hasGlobal);
 
     const statusCard = [
       '╭───『 🤖 *AI CONFIGURATION* 』───',
       '│',
       '│ 👤 *Personal Key:* ' + personalStatus,
-      '│ 🌐 *Bot Global Key:* ' + globalStatus,
+      '│ 🌐 *Bot Global Keys:* ' + globalStatus,
       '│ ⚡ *Status:* ' + (overallReady ? '✅ Ready to chat!' : '⚠️ Needs setup'),
       '│',
+      buildHealthBlock(extra.prefix || '.'),
       '├─『 🔑 *HOW TO GET A KEY* 』──',
       '│',
       '│ 🔹 *Option 1: Google Gemini (Free & Fast)*',

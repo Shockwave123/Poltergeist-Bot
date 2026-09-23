@@ -9,7 +9,7 @@ module.exports = {
           .split('.')
           .map((num) => String(num).replace(/\D/g, ''))
           .filter(Boolean)
-      : ['2349131095067'], // Add your number without + or spaces (e.g., 919876543210)
+      : [''], // Add your number without + or spaces (e.g., 919876543210)
     ownerName: process.env.OWNER_NAME
       ? String(process.env.OWNER_NAME).split(',').map((name) => name.trim())
       : ['Owner'], // Owner names corresponding to ownerNumber array
@@ -21,6 +21,23 @@ module.exports = {
     sessionID: process.env.SESSION_ID || '',
     newsletterJid: '120363161513685998@newsletter', // Newsletter JID for menu forwarding
     updateZipUrl: '', // URL to latest code zip for .update command
+
+    // Session & Connection Behaviour
+    sendWelcomeOnConnect: process.env.SEND_WELCOME !== 'false', // DM the linked number (includes the session id)
+    sessionAutoSave: true, // persist the session id to database/session.json after every link
+    autoRelinkOnLogout: process.env.AUTO_RELINK !== 'false', // show a fresh QR instead of dying when WhatsApp logs us out
+
+        // Runtime self-healing (Render free instances are small and restart often)
+    health: {
+      checkIntervalMs: Number(process.env.HEALTH_CHECK_INTERVAL_MS) || 30 * 1000,
+      memoryLimitMb: Number(process.env.MEMORY_LIMIT_MB) || 420,
+      idleProbeMs: Number(process.env.IDLE_PROBE_MS) || 10 * 60 * 1000,
+      // Refresh the QR before WhatsApp invalidates it (~60 s). Lower is safer on free tiers.
+      qrRefreshTimeoutMs: Number(process.env.QR_REFRESH_TIMEOUT_MS) || 45 * 1000,
+      maxReconnectDelayMs: Number(process.env.MAX_RECONNECT_DELAY_MS) || 60 * 1000,
+      maxCrashesPerWindow: 5,
+      crashWindowMs: 10 * 60 * 1000
+    },
     
     // Sticker Configuration
     packname: 'Poltergeist MD',

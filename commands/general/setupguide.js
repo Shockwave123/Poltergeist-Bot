@@ -52,20 +52,25 @@ ${globalKey ? '✅ Bot has a global fallback API key.' : '❌ Bot has no global 
 ───────────────────────────────────────────────────────────────
 *STEP 3: Verify It Works*
 
-<<<<<<< HEAD
 Try any of these AI commands:
 • ${extra.prefix || '.'}ai What is the speed of light?
 • ${extra.prefix || '.'}deepread (reply to an image/doc with a question)
-• ${extra.prefix || '.'}summary 100 (summarize last 100 messages in group)
-• ${extra.prefix || '.'}aikey test (run diagnostic test)
-=======
-Try one of these AI features:
+• ${extra.prefix || '.'}summary 100 (summarize last 100 messages in a group)
+• ${extra.prefix || '.'}roastai @someone
+• ${extra.prefix || '.'}transcribe (reply to a voice note)
+• ${extra.prefix || '.'}aikey test (run a diagnostic test)
 
-• .ai What is the capital of France?
-• .deepread (reply to an image and ask a question)
-• .summary 200 (in a group, summarize the last 200 messages)
-• .roastai @someone
-• .transcribe (reply to a voice note)
+───────────────────────────────────────────────────────────────
+*FAILOVER: GEMINI + OPENROUTER WORK TOGETHER*
+
+Gemini and OpenRouter are used as a team. When one provider is offline,
+rate limited or out of quota, the bot automatically answers with the other
+one, so AI commands keep working without any manual change.
+
+• Both may be configured at the same time (recommended).
+• Extra keys can be added with a comma: GEMINI_API_KEY=key1,key2
+• Set AI_PROVIDER_PRIORITY=openrouter to try OpenRouter first.
+• Check the live status of every key with: ${extra.prefix || '.'}aikey status
 
 ───────────────────────────────────────────────────────────────
 *TROUBLESHOOTING*
@@ -75,13 +80,13 @@ Try one of these AI features:
 
 ❌ "Google AI is not configured"?
    → You need EITHER a personal key OR the bot owner needs a global key.
-   → Try: .googleai set YOUR_KEY
+   → Try: ${extra.prefix || '.'}aikey set YOUR_KEY (in private chat)
 
 ❌ Still not working?
    → The key might be expired or have no free quota left.
-   → Create a new key in Google AI Studio.
+   → Create a new key in Google AI Studio (or OpenRouter) and set it again.
+   → Add a second provider so the bot can fall back automatically.
    → Revoke old keys you don't use.
->>>>>>> b2a8eb0b338d123d7b02d51698cdb5bd1799e037
 
 ───────────────────────────────────────────────────────────────
 *MANAGE YOUR KEY*

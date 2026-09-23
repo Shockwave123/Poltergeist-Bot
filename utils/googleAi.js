@@ -48,54 +48,198 @@ setInterval(() => {
 }, MODEL_CACHE_TTL);
 
 /**
- * Resolve AI credentials from options, user storage, or environment variables.
+ * Resolve the ordered list of AI credentials to try.
+ *
+ * Order: explicit key -> the user's personal key -> global Gemini keys -> global OpenRouter keys.
+ * Both GEMINI_API_KEY/GEMINI_API_KEYS/GOOGLE_AI_API_KEY and OPENROUTER_API_KEY/OPENROUTER_API_KEYS
+ * accept several keys separated by commas, spaces or new lines, so the bot keeps answering
+ * when one key runs out of quota or a provider is temporarily offline.
+ * Set AI_PROVIDER_PRIORITY=openrouter to try OpenRouter before Gemini.
  */
-function resolveAiCredentials(options = {}) {
-  // 1. Explicit key in options
+function resolveAiCredentialChain(options = {}) {
+  const chain = [];
+  const seen = new Set();
+
+  const push = (key, provider, source) => {
+    const clean = String(key || '').trim().replace(/^["']|["']$/g, '');
+    if (clean.length < 15 || seen.has(clean)) return;
+    seen.add(clean);
+    const resolvedProvider = provider || detectProviderFromKey(clean);
+    chain.push({
+      key: clean,
+      provider: resolvedProvider,
+      source,
+      label: providerLabel(resolvedProvider),
+      healthId: keyId(resolvedProvider, clean),
+    });
+  };
+
+  // 1. Explicit key passed by the caller
   if (options.apiKey && typeof options.apiKey === 'string') {
-    const key = options.apiKey.trim();
-    const provider = options.provider || (key.startsWith('sk-or-') || key.startsWith('sk-') ? 'openrouter' : 'gemini');
-    return { key, provider, source: 'options' };
+    push(options.apiKey, options.provider, 'options');
   }
 
-  // 2. Sender ID lookup in per-user storage
+  // 2. Per-user key saved with `.aikey set`
   if (options.senderId) {
     try {
       const { getUserAiConfig } = require('./userApiKeys');
       const userConf = getUserAiConfig(options.senderId);
-      if (userConf && userConf.key) {
-        return {
-          key: userConf.key,
-          provider: userConf.provider || 'gemini',
-          source: 'personal'
-        };
-      }
+      if (userConf && userConf.key) push(userConf.key, userConf.provider, 'personal');
     } catch (e) {
       // Ignore if userApiKeys is unavailable
     }
   }
 
-  // 3. Global Environment Variables
-  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
-  const openrouterKey = process.env.OPENROUTER_API_KEY;
-
-  if (geminiKey && geminiKey.trim()) {
-    return { key: geminiKey.trim(), provider: 'gemini', source: 'global' };
+  // 3. Global environment keys, respecting the configured provider priority
+  for (const provider of providerPriority()) {
+    for (const key of collectProviderKeys(provider)) push(key, provider, 'global');
   }
 
-  if (openrouterKey && openrouterKey.trim()) {
-    return { key: openrouterKey.trim(), provider: 'openrouter', source: 'global' };
-  }
-
-  return null;
+  return chain;
 }
+
+/**
+ * Resolve a single AI credential (first entry of the failover chain).
+ * Kept for backwards compatibility with commands that only need one key.
+ */
+function resolveAiCredentials(options = {}) {
+  const [first] = resolveAiCredentialChain(options);
+  return first ? { key: first.key, provider: first.provider, source: first.source } : null;
+}
+
+// ==========================================
+// Provider helpers, multi-key parsing & health tracking
+// ==========================================
+
+const AI_KEY_COOLDOWN_MS = {
+  invalid: 10 * 60 * 1000, // dead key - park it for 10 minutes
+  rateLimit: 60 * 1000, // quota/rate limit - retry after a minute
+  network: 45 * 1000, // provider offline/unreachable
+  server: 30 * 1000, // 5xx from the provider
+  other: 15 * 1000,
+};
+
+const aiKeyHealth = new Map(); // healthId -> { downUntil, lastError, lastOkAt, failCount }
+
+/** Stable, non-reversible id used to track a key's health without logging it. */
+function keyId(provider, key) {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) % 1000000007;
+  return `${provider === 'openrouter' ? 'or' : 'gm'}:${key.slice(0, 4)}…${String(hash).slice(-4)}`;
+}
+
+function providerLabel(provider) {
+  return provider === 'openrouter' ? 'OpenRouter' : 'Google Gemini';
+}
+
+function detectProviderFromKey(key) {
+  const clean = String(key || '').trim();
+  return clean.startsWith('sk-or-') || clean.startsWith('sk-') ? 'openrouter' : 'gemini';
+}
+
+/** Provider try-order (env AI_PROVIDER_PRIORITY=openrouter flips the default). */
+function providerPriority() {
+  const preferred = String(process.env.AI_PROVIDER_PRIORITY || 'gemini').toLowerCase();
+  return preferred.startsWith('open') ? ['openrouter', 'gemini'] : ['gemini', 'openrouter'];
+}
+
+/** Read every key configured for a provider (several keys per variable are supported). */
+function collectProviderKeys(provider) {
+  const raw = provider === 'openrouter'
+    ? [process.env.OPENROUTER_API_KEYS, process.env.OPENROUTER_API_KEY]
+    : [process.env.GEMINI_API_KEYS, process.env.GEMINI_API_KEY, process.env.GOOGLE_AI_API_KEY];
+  return [...new Set(
+    raw.filter(Boolean).join(',')
+      .split(/[\s,;]+/)
+      .map((key) => key.trim().replace(/^["']|["']$/g, ''))
+      .filter((key) => key.length >= 15)
+  )];
+}
+
+function isKeyCoolingDown(id) {
+  const health = aiKeyHealth.get(id);
+  return Boolean(health && health.downUntil > Date.now());
+}
+
+function markKeyOk(id) {
+  aiKeyHealth.set(id, { downUntil: 0, lastError: '', lastOkAt: Date.now(), failCount: 0 });
+}
+
+function markKeyDown(id, kind, message) {
+  const previous = aiKeyHealth.get(id) || { failCount: 0, lastOkAt: 0 };
+  const cooldownMs = AI_KEY_COOLDOWN_MS[kind] || AI_KEY_COOLDOWN_MS.other;
+  aiKeyHealth.set(id, {
+    downUntil: Date.now() + cooldownMs,
+    cooldownMs,
+    lastError: message || '',
+    lastOkAt: previous.lastOkAt || 0,
+    failCount: (previous.failCount || 0) + 1,
+  });
+}
+
+/** Work out why a provider call failed so the right cooldown can be applied. */
+function classifyAiError(error) {
+  const status = error?.response?.status;
+  const code = String(error?.code || '');
+  const message = String(error?.response?.data?.error?.message || error?.message || '').toLowerCase();
+
+  if (status === 401 || status === 403 || message.includes('invalid api key') || message.includes('api_key_invalid')) {
+    return 'invalid';
+  }
+  if (status === 429 || message.includes('rate limit') || message.includes('quota') || message.includes('resource_exhausted') || message.includes('insufficient')) {
+    return 'rateLimit';
+  }
+    if (!error?.response || code === 'ECONNABORTED' || code === 'ENOTFOUND' || code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'EAI_AGAIN' || message.includes('offline')) {
+    return 'network';
+  }
+  if (status >= 500) return 'server';
+  // "overloaded" / "service unavailable" style messages from either provider
+  if (message.includes('overloaded') || message.includes('temporarily unavailable') || message.includes('service unavailable')) {
+    return 'server';
+  }
+  return 'other';
+}
+
+/**
+ * Snapshot of provider health for diagnostics (`.health`, `.aikey` status).
+ */
+function getAiHealth() {
+  const chain = resolveAiCredentialChain({});
+  const entries = chain.map((entry) => {
+    const health = aiKeyHealth.get(entry.healthId) || {};
+    const cooling = health.downUntil > Date.now();
+    return {
+      provider: entry.provider,
+      label: entry.label,
+      source: entry.source,
+      keyId: entry.healthId,
+      status: cooling ? 'cooling-down' : (health.failCount ? 'recovering' : 'ready'),
+      cooldownSeconds: cooling ? Math.ceil((health.downUntil - Date.now()) / 1000) : 0,
+      lastError: health.lastError || '',
+      lastOkAt: health.lastOkAt || 0,
+      failCount: health.failCount || 0,
+    };
+  });
+
+  return {
+    configured: chain.length > 0,
+    totalKeys: chain.length,
+    geminiKeys: chain.filter((entry) => entry.provider === 'gemini').length,
+    openrouterKeys: chain.filter((entry) => entry.provider === 'openrouter').length,
+    priority: providerPriority(),
+    entries,
+  };
+}
+
 
 function isConfigured(userKey = null) {
   if (userKey) return true;
   return Boolean(
     process.env.GEMINI_API_KEY ||
+    process.env.GEMINI_API_KEYS ||
     process.env.GOOGLE_AI_API_KEY ||
-    process.env.OPENROUTER_API_KEY
+    process.env.OPENROUTER_API_KEY ||
+    process.env.OPENROUTER_API_KEYS
   );
 }
 
@@ -362,19 +506,52 @@ async function generateOpenRouterContent(parts, apiKey, options = {}) {
  * @returns {Promise<string>} Generated text
  */
 async function generateContent(parts, options = {}) {
-  const credentials = resolveAiCredentials(options);
+  const chain = resolveAiCredentialChain(options);
 
-  if (!credentials) {
+  if (!chain.length) {
     throw new Error(getSetupMessage());
   }
 
-  const { key, provider } = credentials;
+  // testAiKey()/explicit key checks must not silently succeed on a fallback key
+  const candidates = options.noFailover ? chain.slice(0, 1) : chain;
 
-  if (provider === 'openrouter') {
-    return await generateOpenRouterContent(parts, key, options);
+  const preferred = candidates.filter((entry) => !isKeyCoolingDown(entry.healthId));
+  const ordered = preferred.length ? preferred : candidates; // all cooling down? try anyway
+
+  const failures = [];
+
+  for (const entry of ordered) {
+    try {
+      const text = entry.provider === 'openrouter'
+        ? await generateOpenRouterContent(parts, entry.key, options)
+        : await generateGeminiContent(parts, entry.key, options);
+
+      markKeyOk(entry.healthId);
+
+      // Let the caller know a fallback provider answered instead of the preferred one
+      if (failures.length && typeof options.onProviderSwitch === 'function') {
+        try {
+          options.onProviderSwitch({ from: failures[0], to: entry });
+        } catch (e) {
+          // Callback errors must never break generation
+        }
+      }
+
+      return text;
+    } catch (error) {
+      const kind = classifyAiError(error);
+      markKeyDown(entry.healthId, kind, error.message);
+      failures.push(`${entry.label} (${entry.source}) [${kind}]: ${error.message}`);
+
+      // A single-key test must surface the exact provider error
+      if (options.noFailover) throw error;
+    }
   }
 
-  return await generateGeminiContent(parts, key, options);
+  throw new Error(
+    '❌ All configured AI providers failed, so the request could not be answered.\n\n' +
+    failures.map((line) => `• ${line}`).join('\n')
+  );
 }
 
 /**
@@ -390,6 +567,7 @@ async function testAiKey(key, provider) {
     const res = await generateContent(testParts, {
       apiKey: key,
       provider,
+      noFailover: true, // only test the key the user just provided
       temperature: 0.1,
       maxOutputTokens: 10,
       timeout: 15000,
@@ -405,5 +583,10 @@ module.exports = {
   getSetupMessage,
   isConfigured,
   resolveAiCredentials,
+  resolveAiCredentialChain,
   testAiKey,
+  getAiHealth,
+  providerLabel,
+  detectProviderFromKey,
+  classifyAiError,
 };

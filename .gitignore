@@ -3,5 +3,10 @@ node_modules/
 database/googleKeys.json
 database/reminders.json
 database/.user-key-secret
+database/session.json
 auth_info_baileys/
 session/
+*.log
+*.bak
+original_*.js
+fix_*.js

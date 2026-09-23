@@ -1005,6 +1005,7 @@ const handleMessage = async (sock, msg) => {
       sender,
       isGroup,
       groupMetadata,
+      prefix: config.prefix,
       isOwner: isOwner(sender),
       isAdmin: await isAdmin(sock, sender, from, groupMetadata),
       isBotAdmin: await isBotAdmin(sock, from, groupMetadata),
@@ -1771,5 +1772,16 @@ module.exports = {
   isBotAdmin,
   isMod,
   getGroupMetadata,
-  findParticipant
+  findParticipant,
+  // Used by the health monitor to free RAM without restarting the bot
+  clearCaches: () => {
+    try {
+      groupMetadataCache.clear();
+      antibadwordStickerCache = null;
+      return true;
+    } catch (error) {
+      console.error('[handler] cache clear failed:', error.message);
+      return false;
+    }
+  }
 };

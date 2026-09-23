@@ -31,26 +31,89 @@ initDB(WARNINGS_DB, {});
 initDB(MODS_DB, { moderators: [] });
 initDB(SUDO_DB, { sudoUsers: [] });
 
-// Read database
-const readDB = (filePath) => {
-  try {
-    const data = fs.readFileSync(filePath, 'utf-8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error(`Error reading database: ${error.message}`);
-    return {};
-  }
-};
+// ----------------------------------------------------------------------------
+// Crash-safe storage layer
+//  * everything is cached in memory so hot paths (per message) never hit disk
+//  * writes are debounced and atomic (write temp file + rename) so a crash or a
+//    Render redeploy in the middle of a write can never corrupt a database file
+//  * a corrupt file is backed up instead of silently wiping user data
+// ----------------------------------------------------------------------------
+const dbCache = new Map(); // filePath -> parsed data
+const pendingWrites = new Map(); // filePath -> timeout handle
+const WRITE_DEBOUNCE_MS = 400;
 
-// Write database
-const writeDB = (filePath, data) => {
+/** Atomically persist the cached copy of a database file. */
+const flushFile = (filePath) => {
+  const pending = pendingWrites.get(filePath);
+  if (pending) {
+    clearTimeout(pending);
+    pendingWrites.delete(filePath);
+  }
+  const data = dbCache.get(filePath);
+  if (data === undefined) return true;
   try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    const tmpPath = `${filePath}.${process.pid}.tmp`;
+    fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2));
+    fs.renameSync(tmpPath, filePath);
     return true;
   } catch (error) {
     console.error(`Error writing database: ${error.message}`);
     return false;
   }
+};
+
+/** Queue a debounced flush so bursts of updates only produce one disk write. */
+const scheduleFlush = (filePath) => {
+  if (pendingWrites.has(filePath)) return true;
+  const timer = setTimeout(() => {
+    pendingWrites.delete(filePath);
+    flushFile(filePath);
+  }, WRITE_DEBOUNCE_MS);
+  if (typeof timer.unref === 'function') timer.unref();
+  pendingWrites.set(filePath, timer);
+  return true;
+};
+
+/** Flush every pending database write immediately (used on shutdown/restart). */
+const flushAll = () => {
+  let ok = true;
+  for (const filePath of dbCache.keys()) {
+    if (!flushFile(filePath)) ok = false;
+  }
+  return ok;
+};
+
+// Read database (cached)
+const readDB = (filePath) => {
+  if (dbCache.has(filePath)) return dbCache.get(filePath);
+  let data = {};
+  try {
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      data = raw.trim() ? JSON.parse(raw) : {};
+      if (!data || typeof data !== 'object' || Array.isArray(data)) data = {};
+    }
+  } catch (error) {
+    console.error(`Error reading database (${path.basename(filePath)}): ${error.message}`);
+    try {
+      if (fs.existsSync(filePath)) {
+        const backup = `${filePath}.corrupt-${Date.now()}`;
+        fs.copyFileSync(filePath, backup);
+        console.warn(`Backed up unreadable database to ${path.basename(backup)}`);
+      }
+    } catch (backupError) {
+      console.error(`Could not back up database: ${backupError.message}`);
+    }
+    data = {};
+  }
+  dbCache.set(filePath, data);
+  return data;
+};
+
+// Write database (debounced + atomic)
+const writeDB = (filePath, data) => {
+  dbCache.set(filePath, data);
+  return scheduleFlush(filePath);
 };
 
 // Group Settings
@@ -240,5 +303,7 @@ module.exports = {
   getSudoUsers,
   addSudoUser,
   removeSudoUser,
-  isSudoUser
+  isSudoUser,
+  flushAll,
+  getCacheSize: () => dbCache.size
 };
