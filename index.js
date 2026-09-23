@@ -718,18 +718,35 @@ function prepareAuthFiles() {
   const hasCreds = sessionManager.hasLocalCreds();
 
   if (configured && sessionManager.isSessionIdValid(configured) && !hasCreds) {
-    if (sessionManager.importSessionToDisk(configured, { authMethod: 'session-id' })) {
+    // Validate the decoded payload BEFORE writing it — a placeholder string
+    // (53-byte {me,registered}) would otherwise poison session/creds.json.
+    let decodedOk = false;
+    try {
+      const raw = sessionManager.decodeSessionId(configured);
+      decodedOk = sessionManager.isUsableCreds(raw);
+    } catch (error) { decodedOk = false; }
+    if (!decodedOk) {
+      console.error('📡 Session: SESSION_ID decodes to an unlinked placeholder, ignoring it. Pair fresh to get a real session id.');
+    } else if (sessionManager.importSessionToDisk(configured, { authMethod: 'session-id' })) {
       authMethod = 'session-id';
       console.log('📡 Session: loaded from SESSION_ID.');
       return;
+    } else {
+      console.error('📡 Session: SESSION_ID could not be imported. Falling back to QR pairing.');
     }
-    console.error('📡 Session: SESSION_ID could not be imported. Falling back to QR pairing.');
   }
 
   if (!hasCreds) {
     const stored = sessionManager.getSessionId();
     if (stored && sessionManager.isSessionIdValid(stored)) {
-      if (sessionManager.importSessionToDisk(stored, { authMethod: 'session-file' })) {
+      let storedOk = false;
+      try {
+        storedOk = sessionManager.isUsableCreds(sessionManager.decodeSessionId(stored));
+      } catch (error) { storedOk = false; }
+      if (!storedOk) {
+        console.error('📡 Session: database/session.json holds an unlinked placeholder, ignoring it. Pair fresh to get a real session id.');
+        sessionManager.setState({ sessionId: '' });
+      } else if (sessionManager.importSessionToDisk(stored, { authMethod: 'session-file' })) {
         authMethod = 'session-file';
         console.log('📡 Session: restored from database/session.json.');
         return;

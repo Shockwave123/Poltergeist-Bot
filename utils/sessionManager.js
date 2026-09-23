@@ -164,10 +164,18 @@ const quarantineBrokenCreds = () => {
   }
 };
 
-/** Build a session string from the creds.json currently on disk. */
+/**
+ * Build a session string from the creds.json currently on disk.
+ * Only linked accounts (registered + real key material) may be exported —
+ * anything else is a placeholder that would poison database/session.json.
+ */
 const exportSessionFromDisk = () => {
   const raw = readCredsRaw();
   if (!raw) return null;
+  if (!isUsableCreds(raw)) {
+    console.error('[sessionManager] export refused: creds on disk are not a linked account (registered=false or key material missing).');
+    return null;
+  }
   try {
     return encodeCreds(raw);
   } catch (error) {
