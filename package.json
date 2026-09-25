@@ -7,7 +7,10 @@
     "scripts": {
         "start": "node --max-old-space-size=460 index.js",
         "dev": "nodemon index.js",
+<<<<<<< HEAD
         "test": "node tests/session-manager.test.js",
+=======
+>>>>>>> bec881c26849577e79ab8645ae6768449cd7108a
         "install:no-puppeteer": "PUPPETEER_SKIP_DOWNLOAD=true PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install"
     },
     "keywords": [
