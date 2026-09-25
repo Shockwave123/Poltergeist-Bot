@@ -6,6 +6,7 @@ database/.user-key-secret
 database/session.json
 auth_info_baileys/
 session/
+temp/
 *.log
 *.bak
 original_*.js

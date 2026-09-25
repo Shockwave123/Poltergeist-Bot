@@ -1254,6 +1254,15 @@ async function startBot(reason = 'startup') {
 
     require('./commands/general/reminder').setSocket(sock);
 
+    // Anti-call listener: rejects + blocks incoming calls when
+    // `config.defaultGroupSettings.anticall` is true (toggled by `.anticall on`).
+    // Without this the `.anticall` command flipped a flag that nothing ever read.
+    try {
+      handler.initializeAntiCall(sock);
+    } catch (error) {
+      console.error('[anticall] listener setup failed:', error?.message || error);
+    }
+
     // Bind the in-memory message store
     store.bind(sock.ev);
 
