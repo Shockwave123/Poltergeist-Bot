@@ -1,0 +1,80 @@
+/**
+ * Milf Command - Get random milf anime images
+ */
+
+const fs = require('fs');
+const path = require('path');
+const { getTempDir, deleteTempFile } = require('../../utils/tempManager');
+const { getAnimeImage } = require('../../utils/animeApi');
+
+module.exports = {
+  name: 'milf',
+  aliases: ['milfnsfw'],
+  category: 'anime',
+  desc: 'Get random milf NSFW anime images',
+  usage: 'milf',
+  execute: async (sock, msg, args, extra) => {
+    try {
+      const { imageUrl, imageResponse, imageBuffer } = await getAnimeImage('milf');
+      
+      if (!imageBuffer || imageBuffer.length === 0) {
+        throw new Error('Empty image response');
+      }
+      
+      const maxImageSize = 7 * 1024 * 1024;
+      if (imageBuffer.length > maxImageSize) {
+        throw new Error(`Image too large: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (max 5MB)`);
+      }
+      
+      const contentType = imageResponse.headers['content-type'] || '';
+      let extension = 'jpg';
+      if (contentType.includes('png')) {
+        extension = 'png';
+      } else if (contentType.includes('jpeg')) {
+        extension = 'jpg';
+      } else if (imageUrl.match(/\.(png|jpg|jpeg)$/i)) {
+        const match = imageUrl.match(/\.(png|jpg|jpeg)$/i);
+        extension = match[1].toLowerCase();
+      }
+      
+      const tempDir = getTempDir();
+      const timestamp = Date.now();
+      const tempImagePath = path.join(tempDir, `milf_${timestamp}.${extension}`);
+      
+      let finalBuffer = null;
+      
+      try {
+        fs.writeFileSync(tempImagePath, imageBuffer);
+        finalBuffer = fs.readFileSync(tempImagePath);
+        
+        if (!finalBuffer || finalBuffer.length === 0) {
+          throw new Error('Failed to read image from temp file');
+        }
+        
+        await sock.sendMessage(extra.from, {
+          image: finalBuffer
+        }, { quoted: msg });
+        
+      } finally {
+        try {
+          deleteTempFile(tempImagePath);
+        } catch (cleanupError) {
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error in milf command:', error);
+      
+      if (error.response?.status === 404) {
+        await extra.reply('❌ Image not found. Please try again.');
+      } else if (error.response?.status === 429) {
+        await extra.reply('❌ Rate limit exceeded. Please try again later.');
+      } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        await extra.reply('❌ Request timed out. Please try again.');
+      } else {
+        await extra.reply(`❌ Failed to fetch milf image: ${error.message}`);
+      }
+    }
+  }
+};
+

@@ -1,0 +1,122 @@
+/**
+ * Global Configuration for WhatsApp MD Bot
+ */
+
+module.exports = {
+    // Bot Owner Configuration
+    ownerNumber: process.env.OWNER_NUMBER
+      ? String(process.env.OWNER_NUMBER)
+          .split('.')
+          .map((num) => String(num).replace(/\D/g, ''))
+          .filter(Boolean)
+      : ['2349131095067'], // Add your number without + or spaces (e.g., 919876543210)
+    ownerName: process.env.OWNER_NAME
+      ? String(process.env.OWNER_NAME).split(',').map((name) => name.trim())
+      : ['Owner'], // Owner names corresponding to ownerNumber array
+    
+    // Bot Configuration
+    botName: 'Poltergeist MD',
+    prefix: '.',
+    sessionName: 'session',
+    sessionID: process.env.SESSION_ID || '',
+    newsletterJid: '120363161513685998@newsletter', // Newsletter JID for menu forwarding
+    updateZipUrl: '', // URL to latest code zip for .update command
+
+    // Session & Connection Behaviour
+    sendWelcomeOnConnect: process.env.SEND_WELCOME !== 'false', // DM the linked number (includes the session id)
+    sessionAutoSave: true, // persist the session id to database/session.json after every link
+    autoRelinkOnLogout: process.env.AUTO_RELINK !== 'false', // show a fresh QR instead of dying when WhatsApp logs us out
+
+        // Runtime self-healing (Render free instances are small and restart often)
+    health: {
+      checkIntervalMs: Number(process.env.HEALTH_CHECK_INTERVAL_MS) || 30 * 1000,
+      memoryLimitMb: Number(process.env.MEMORY_LIMIT_MB) || 420,
+      idleProbeMs: Number(process.env.IDLE_PROBE_MS) || 10 * 60 * 1000,
+      // Refresh the QR before WhatsApp invalidates it (~60 s). Lower is safer on free tiers.
+      qrRefreshTimeoutMs: Number(process.env.QR_REFRESH_TIMEOUT_MS) || 45 * 1000,
+      maxReconnectDelayMs: Number(process.env.MAX_RECONNECT_DELAY_MS) || 60 * 1000,
+      maxCrashesPerWindow: 5,
+      crashWindowMs: 10 * 60 * 1000
+    },
+    
+    // Sticker Configuration
+    packname: 'Poltergeist MD',
+    
+    // Bot Behavior
+    selfMode: false, // Private mode - only owner can use commands
+    autoRead: false,
+    autoTyping: false,
+    autoBio: false,
+    autoSticker: false,
+    autoReact: false,
+    autoReactMode: 'bot',
+    autoDownload: false,
+    
+    // Group Settings Defaults
+    defaultGroupSettings: {
+      antilink: false,
+      antilinkAction: 'delete', // 'delete', 'kick', 'warn'
+      antitag: false,
+      antitagAction: 'delete',
+      antiall: false, // Owner only - blocks all messages from non-admins
+      antiviewonce: false,
+      antibot: false,
+      antibotAction: 'warn', // 'warn' | 'kick'
+      anticall: false, // Anti-call feature
+      antigroupmention: false, // Anti-group mention feature
+      antigroupmentionAction: 'delete', // 'delete', 'kick'
+      antigroupstatus: false, // Block group status posts
+      antigroupstatusAction: 'delete', // 'delete', 'kick'
+      antisticker: false, // Stickers not allowed in group
+      antistickerAction: 'delete', // 'delete', 'kick'
+      antibadword: false, // Block bad words in group
+      antibadwordAction: 'delete', // 'delete', 'kick', 'warn'
+      welcome: false,
+      welcomeMessage: '╭╼━≪•𝙽𝙴𝚆 𝙼𝙴𝙼𝙱𝙴𝚁•≫━╾╮\n┃𝚆𝙴𝙻𝙲𝙾𝙼𝙴: @user 👋\n┃Member count: #memberCount\n┃𝚃𝙸𝙼𝙴: time⏰\n╰━━━━━━━━━━━━━━━╯\n\n*@user* Welcome to *@group*! 🎉\n*Group 𝙳𝙴𝚂𝙲𝚁𝙸𝙿𝚃𝙸𝙾𝙽*\ngroupDesc\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ botName*',
+      goodbye: false,
+      goodbyeMessage: 'Goodbye @user 👋 We will never miss you!',
+      antiSpam: false,
+      antidelete: false,
+      nsfw: false,
+      detect: false,
+      chatbot: false,
+      chatbotVoice: false,
+      autosticker: false // Auto-convert images/videos to stickers
+    },
+    
+    // API Keys (add your own)
+    apiKeys: {
+      gemini: process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '',
+      openrouter: process.env.OPENROUTER_API_KEY || '',
+      openai: process.env.OPENAI_API_KEY || '',
+      deepai: '',
+      remove_bg: ''
+    },
+    
+    // Message Configuration
+    messages: {
+      wait: '⏳ Please wait...',
+      success: '✅ Success!',
+      error: '❌ Error occurred!',
+      ownerOnly: '👑 This command is only for bot owner!',
+      adminOnly: '🛡️ This command is only for group admins!',
+      groupOnly: '👥 This command can only be used in groups!',
+      privateOnly: '💬 This command can only be used in private chat!',
+      botAdminNeeded: '🤖 Bot needs to be admin to execute this command!',
+      invalidCommand: '❓ Invalid command! Type .menu for help'
+    },
+    
+    // Timezone
+    timezone: 'Asia/Kolkata',
+    
+    // Limits
+    maxWarnings: 3,
+    
+    // Social Links (optional)
+    social: {
+      github: 'https://github.com/yourusername',
+      instagram: 'https://instagram.com/yourusername',
+      youtube: 'https://youtube.com/yourchannel'
+    }
+};
+  
