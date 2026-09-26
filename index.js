@@ -5,6 +5,12 @@ process.env.PUPPETEER_SKIP_DOWNLOAD = 'true';
 process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = 'true';
 process.env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR || '/tmp/puppeteer_cache_disabled';
 
+// Patch the pinned Baileys build with the companion_reg_refresh fix (upstream
+// PR WhiskeySockets/Baileys#2765) BEFORE the library is loaded. The same
+// script also runs from `postinstall` during `npm install` on Render, so this
+// is only a safety net for installs that skipped lifecycle scripts.
+require('./scripts/patch-baileys').applyBaileysPatch();
+
 const { initializeTempSystem } = require('./utils/tempManager');
 const { startCleanup } = require('./utils/cleanup');
 initializeTempSystem();
@@ -74,7 +80,8 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   Browsers,
-  fetchLatestBaileysVersion
+  fetchLatestBaileysVersion,
+  fetchLatestWaWebVersion
 } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const qrImage = require('qrcode');
@@ -621,6 +628,12 @@ setInterval(() => {
 }, 5 * 60 * 1000); // Every 5 minutes
 
 // Custom Pino logger with suppression for Baileys noise
+/** pino-pretty is an optional dev dependency - a missing transport target
+ *  crashes the pino worker thread on boot, so only enable it when installed. */
+const pinoPrettyAvailable = () => {
+  try { require.resolve('pino-pretty'); return true; } catch (error) { return false; }
+};
+
 const createSuppressedLogger = (level = 'silent') => {
   const forbiddenPatterns = [
     'closing session',
@@ -646,7 +659,7 @@ const createSuppressedLogger = (level = 'silent') => {
     logger = pino({
       level,
       // Fallback transport without pino-pretty (in case not installed)
-      transport: process.env.NODE_ENV === 'production' ? undefined : {
+      transport: (process.env.NODE_ENV === 'production' || !pinoPrettyAvailable()) ? undefined : {
         target: 'pino-pretty',
         options: {
           colorize: true,
@@ -1188,35 +1201,35 @@ async function startBot(reason = 'startup') {
 
     let version;
     try {
-      ({ version } = await fetchLatestBaileysVersion());
+      // WhatsApp rejects handshakes from stale client versions, so ask the
+      // live WA Web endpoint (sw.js client revision) first and only fall back
+      // to Baileys' repo parse / bundled version when it is unavailable.
+      // Ref: WhiskeySockets/Baileys#2679
+      const live = await fetchLatestWaWebVersion();
+      if (live?.isLatest && Array.isArray(live.version)) {
+        ({ version } = live);
+      } else {
+        console.warn(`ℹ️ Live WA Web revision unavailable (${live?.error?.message || 'unknown'}); trying the Baileys repo version.`);
+        ({ version } = await fetchLatestBaileysVersion());
+      }
     } catch (error) {
       console.error('[socket] could not fetch the latest WA version, using the bundled one:', error?.message || error);
       version = undefined;
     }
 
-    const sock = makeWASocket({
+        const sock = makeWASocket({
       version,
-      logger: createSuppressedLogger('silent'),
-      // The QR is rendered from the connection.update handler below; the legacy
-      // `printQRInTerminal` option is deprecated in Baileys 7 and must not be set.
-      //
-      // Baileys builds the pairing payload from this tuple: `companion_platform_id`
-      // is derived from the browser name (Chrome -> 1) and `companion_platform_display`
-      // is `${browser[1]} (${browser[0]})` (see Socket/messages-recv.js). macOS('Chrome')
-      // mirrors a real WhatsApp Web client on a Mac (Baileys' own default), so the
-      // fingerprint WhatsApp validates during a pairing-code link matches; the old
-      // Browsers.ubuntu() advertised "Chrome (Ubuntu)" instead.
+      logger: createSuppressedLogger(process.env.BAILEYS_LOG_LEVEL || 'warn'),
       browser: Browsers.macOS('Chrome'),
       auth: state,
-      // Memory optimisation: never load old messages/history into RAM
       syncFullHistory: false,
       downloadHistory: false,
       markOnlineOnConnect: false,
-      connectTimeoutMs: 60000,
+      connectTimeoutMs: 90000,
       keepAliveIntervalMs: 30000,
-      retryRequestDelayMs: 2000,
-      qrTimeout: 30000,
-      getMessage: async () => undefined // Don't load messages from store
+      retryRequestDelayMs: 5000,
+      qrTimeout: 60000,
+      getMessage: async () => undefined
     });
 
     const generation = ++socketGeneration;

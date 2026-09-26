@@ -16,7 +16,7 @@ module.exports = {
     
     // Bot Configuration
     botName: 'Poltergeist MD',
-    prefix: '.',
+    prefix: ',',
     sessionName: 'session',
     sessionID: process.env.SESSION_ID || '',
     newsletterJid: '120363161513685998@newsletter', // Newsletter JID for menu forwarding
@@ -29,11 +29,12 @@ module.exports = {
 
         // Runtime self-healing (Render free instances are small and restart often)
     health: {
-      checkIntervalMs: Number(process.env.HEALTH_CHECK_INTERVAL_MS) || 30 * 1000,
+      checkIntervalMs: Number(process.env.HEALTH_CHECK_INTERVAL_MS) || 45 * 1000,
       memoryLimitMb: Number(process.env.MEMORY_LIMIT_MB) || 420,
       idleProbeMs: Number(process.env.IDLE_PROBE_MS) || 10 * 60 * 1000,
-      // Refresh the QR before WhatsApp invalidates it (~60 s). Lower is safer on free tiers.
-      qrRefreshTimeoutMs: Number(process.env.QR_REFRESH_TIMEOUT_MS) || 45 * 1000,
+      // Refresh the QR before WhatsApp invalidates it (~60 s). 
+      // Increased for Render free tier to give more time for scanning.
+      qrRefreshTimeoutMs: Number(process.env.QR_REFRESH_TIMEOUT_MS) || 120 * 1000,
       maxReconnectDelayMs: Number(process.env.MAX_RECONNECT_DELAY_MS) || 60 * 1000,
       maxCrashesPerWindow: 5,
       crashWindowMs: 10 * 60 * 1000

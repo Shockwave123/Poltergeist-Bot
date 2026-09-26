@@ -8,6 +8,7 @@
         "start": "node --max-old-space-size=460 index.js",
         "dev": "nodemon index.js",
         "test": "node tests/session-manager.test.js",
+        "postinstall": "node scripts/patch-baileys.js",
         "install:no-puppeteer": "PUPPETEER_SKIP_DOWNLOAD=true PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install"
     },
     "keywords": [
@@ -22,7 +23,7 @@
     "dependencies": {
         "@bochilteam/scraper": "^5.0.1",
         "@vitalets/google-translate-api": "^9.2.1",
-        "@whiskeysockets/baileys": "^v7.0.0-rc.9",
+        "@whiskeysockets/baileys": "7.0.0-rc14",
         "axios": "^1.7.2",
         "canvas": "^3.2.1",
         "cheerio": "^1.0.0-rc.12",
@@ -47,5 +48,8 @@
     },
     "devDependencies": {
         "nodemon": "^3.1.0"
+    },
+    "engines": {
+        "node": ">=20.19"
     }
 }
