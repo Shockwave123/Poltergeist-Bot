@@ -1,0 +1,1 @@
+﻿baileysPath=True name=@whiskeysockets/baileys nodeProcs=0 logs=_npmver.log lockTime=09/24/2026 23:09:33
