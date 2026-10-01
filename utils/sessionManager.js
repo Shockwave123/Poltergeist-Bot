@@ -135,9 +135,9 @@ const parseCreds = (raw) => {
 
 /** Key material Baileys needs to build a signal session (missing = crash at boot). */
 const hasKeyMaterial = (parsed) => Boolean(
-  parsed?.noiseKey?.keyPair?.public &&
-  parsed?.identityKey?.public &&
-  parsed?.signedPreKey?.keyPair?.public
+  (parsed?.noiseKey?.public || parsed?.noiseKey?.keyPair?.public) &&
+  (parsed?.signedIdentityKey?.public || parsed?.identityKey?.public) &&
+  (parsed?.signedPreKey?.keyPair?.public || parsed?.signedPreKey?.public)
 );
 
 /**

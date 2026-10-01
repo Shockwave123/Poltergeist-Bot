@@ -13,8 +13,9 @@
  *     a REGISTRATION node (Socket/socket.js keys the choice off `creds.me`), so the
  *     phone permanently answered "Couldn't link device".
  *
- * A creds file is now only a session when `registered === true`. These assertions run
- * without any dependency on WhatsApp or the network.
+ * Pairing credentials are only a session once WhatsApp confirms the link, and key
+ * material is validated against the actual Baileys credential shape. These assertions
+ * run without any dependency on WhatsApp or the network.
  *
  * Usage: npm test   (or: node tests/session-manager.test.js)
  */
@@ -76,8 +77,8 @@ const resetSessionFolder = () => {
 // Fixtures
 // ---------------------------------------------------------------------------
 const keyMaterial = () => ({
-  noiseKey: { keyPair: { public: 'noise-pub', private: 'noise-priv' } },
-  identityKey: { public: 'identity-pub', private: 'identity-priv' },
+  noiseKey: { public: 'noise-pub', private: 'noise-priv' },
+  signedIdentityKey: { public: 'identity-pub', private: 'identity-priv' },
   signedPreKey: { keyPair: { public: 'signed-pub', private: 'signed-priv' }, keyId: 1, signature: 'sig' },
   advSecretKey: 'adv-secret',
   registrationId: 123456
@@ -118,11 +119,18 @@ const linkedCredsWithBuffers = () => {
   const buf = (value) => ({ type: 'Buffer', data: Buffer.from(value).toString('base64') });
   return {
     ...linkedCreds(),
-    noiseKey: { keyPair: { public: buf('noise-pub'), private: buf('noise-priv') } },
-    identityKey: { public: buf('identity-pub'), private: buf('identity-priv') },
+    noiseKey: { public: buf('noise-pub'), private: buf('noise-priv') },
+    signedIdentityKey: { public: buf('identity-pub'), private: buf('identity-priv') },
     signedPreKey: { keyPair: { public: buf('signed-pub'), private: buf('signed-priv') }, keyId: 1, signature: buf('sig') }
   };
 };
+
+const legacyCreds = () => ({
+  ...linkedCreds(),
+  noiseKey: { keyPair: { public: 'noise-pub', private: 'noise-priv' } },
+  identityKey: { public: 'identity-pub', private: 'identity-priv' },
+  signedIdentityKey: undefined
+});
 
 console.log('🔎 sessionManager pairing-mode regression test');
 
@@ -268,6 +276,20 @@ suite('5. A QR-linked session (Baileys never sets `registered`) is still a sessi
     if (!sessionManager.importSessionToDisk(sessionId, { authMethod: 'session-file' })) {
       throw new Error('a QR-linked session id must stay importable');
     }
+  });
+});
+
+suite('6. Previously saved credential shape remains supported', () => {
+  resetSessionFolder();
+  writeCreds(legacyCreds());
+
+  check('legacy key material is usable', () => {
+    if (!sessionManager.isUsableCreds(sessionManager.readCredsRaw())) {
+      throw new Error('previously saved credential fields must remain usable');
+    }
+  });
+  check('legacy linked credentials are retained', () => {
+    if (!sessionManager.hasLocalCreds()) throw new Error('legacy linked credentials must be recognized');
   });
 });
 
