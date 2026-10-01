@@ -140,7 +140,7 @@ const connectionStats = () => ({
   uptimeSeconds: Math.round((Date.now() - BOT_STARTED_AT) / 1000),
   socketOpenedAt,
   connected: Boolean(activeSocket && isSocketOpen(activeSocket)),
-  linked: Boolean(activeAuthState?.creds?.registered),
+  linked: sessionManager.isLinkedCredsObject(activeAuthState?.creds),
   reconnects: reconnectCount,
   reconnectAttempts,
   lastDisconnectReason,
@@ -486,13 +486,13 @@ const startSetupServer = () => {
         qrAgeSeconds: latestQrIssuedAt ? Math.round((Date.now() - latestQrIssuedAt) / 1000) : null,
         // Countdown data for the QR refresh timer
         qrRefreshTimeoutSeconds: Math.round(config.health.qrRefreshTimeoutMs / 1000),
-        // Countdown is valid whenever a QR was issued and we are not registered,
+        // Countdown is valid whenever a QR was issued and the account is not linked,
         // regardless of the socket's transient open/closing state during refresh.
-        qrRefreshSeconds: (latestQrIssuedAt && !activeAuthState?.creds?.registered)
+        qrRefreshSeconds: (latestQrIssuedAt && !sessionManager.isLinkedCredsObject(activeAuthState?.creds))
           ? Math.max(0, Math.round(config.health.qrRefreshTimeoutMs / 1000) - Math.round((Date.now() - latestQrIssuedAt) / 1000))
           : null,
         connected: isSocketOpen(activeSocket),
-        linked: Boolean(activeAuthState?.creds?.registered),
+        linked: sessionManager.isLinkedCredsObject(activeAuthState?.creds),
         botNumber: activeSocket?.user?.id ? activeSocket.user.id.split(':')[0].split('@')[0] : null,
         authMethod,
         sessionReady: session.hasSession,
@@ -526,7 +526,7 @@ const startSetupServer = () => {
         response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
         response.end(JSON.stringify(payload));
       };
-      if (isSocketOpen(activeSocket) && activeAuthState?.creds?.registered) {
+      if (isSocketOpen(activeSocket) && sessionManager.isLinkedCredsObject(activeAuthState?.creds)) {
         respond(409, { error: 'The bot is already connected, so there is no QR code to refresh.' });
         return;
       }
@@ -942,7 +942,7 @@ async function runHealthCheck() {
       // (this fixes the QR becoming null after 5-10 minutes during reconnects).
       const pairingActive = authMethod === 'pairing' && latestPairingCode &&
         (Date.now() - pairingCodeIssuedAt) < PAIRING_CODE_TTL_MS;
-      if (!activeAuthState?.creds?.registered && !pairingActive) {
+      if (!sessionManager.isLinkedCredsObject(activeAuthState?.creds) && !pairingActive) {
         const qrAge = latestQrIssuedAt ? Date.now() - latestQrIssuedAt : null;
         const socketAge = socketCreatedAt ? Date.now() - socketCreatedAt : 0;
         const stale = (qrAge !== null && qrAge > config.health.qrRefreshTimeoutMs) ||
@@ -980,7 +980,7 @@ async function runHealthCheck() {
     // 4) Keep the QR code alive while waiting for a scan.
     //    Skip this when a pairing code is active or when traffic was recently received,
     //    so we never terminate an in-flight handshake while the phone shows "Logging in...".
-    if (!activeAuthState?.creds?.registered) {
+    if (!sessionManager.isLinkedCredsObject(activeAuthState?.creds)) {
       const pairingActive = authMethod === 'pairing' && latestPairingCode &&
         (Date.now() - pairingCodeIssuedAt) < PAIRING_CODE_TTL_MS;
       const recentTraffic = (Date.now() - lastServerTrafficAt) < 45 * 1000;
@@ -1087,7 +1087,7 @@ async function requestPairingCodeFor(rawPhoneNumber) {
 
   if (pairingInFlight) throw new Error('A pairing request is already running. Please wait a moment.');
   if (Date.now() - pairingRequestAt < 5000) throw new Error('Please wait 5 seconds before requesting another pairing code.');
-  if (activeAuthState?.creds?.registered) {
+  if (sessionManager.isLinkedCredsObject(activeAuthState?.creds)) {
     throw new Error('This bot is already linked to a WhatsApp account. Unlink the device in WhatsApp first, then reload this page.');
   }
 
@@ -1275,7 +1275,7 @@ async function startBot(reason = 'startup') {
     pendingPairingPhone = '';
     sock.__pairingReady = false; // true once WhatsApp sends pair-device (the qr event)
 
-    if (state.creds.registered) {
+    if (sessionManager.isLinkedCredsObject(state.creds)) {
       if (authMethod === 'none' || authMethod === 'qr') authMethod = 'session-file';
       setupStatus = 'Connecting with the saved session...';
     } else {
