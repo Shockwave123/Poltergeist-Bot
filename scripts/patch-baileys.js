@@ -14,10 +14,10 @@
  * reports "Couldn't link device". Neither the QR nor the pairing-code flow can
  * complete. See WhiskeySockets/Baileys#2737 and the unmerged fix PR #2765.
  *
- * This script ports PR #2765 (plus the #2602 guard that stops
- * `link_code_companion_reg` responses without crypto fields from crashing the
- * pairing-code path with `Boom('Invalid buffer', 400)`) onto the compiled
- * package that npm installs.
+ * This script ports PR #2765, the #2749 pre-login ACK fix, and the #2602 guard
+ * that stops `link_code_companion_reg` responses without crypto fields from
+ * crashing the pairing-code path with `Boom('Invalid buffer', 400)` onto the
+ * compiled package that npm installs.
  *
  * When it runs
  * ------------
@@ -261,6 +261,11 @@ const LINK_CODE_MARKER = "if (!getBinaryNodeChildBuffer(linkCodeCompanionReg, 'p
 const LINK_CODE_FIND = "                const linkCodeCompanionReg = getBinaryNodeChild(node, 'link_code_companion_reg');";
 const LINK_CODE_REPLACE = `${LINK_CODE_FIND}\n                ${LINK_CODE_MARKER} // #2602: empty/errored shape must not crash the pairing-code path`;
 
+// A notification can arrive before pair-success has populated creds.me. The
+// ACK builder already supports an absent meId for notification-class acks.
+const PRELOGIN_ACK_FIND = 'const stanza = buildAckStanza(node, errorCode, authState.creds.me.id);';
+const PRELOGIN_ACK_REPLACE = 'const stanza = buildAckStanza(node, errorCode, authState.creds.me?.id); // #2749: allow notification ACKs before login';
+
 const EDITS = [
   {
     file: 'lib/Utils/companion-reg-client-utils.js',
@@ -296,6 +301,13 @@ const EDITS = [
     marker: LINK_CODE_MARKER,
     find: LINK_CODE_FIND,
     replace: LINK_CODE_REPLACE
+  },
+  {
+    file: 'lib/Socket/messages-recv.js',
+    label: 'messages-recv: pre-login notification ACK',
+    marker: 'authState.creds.me?.id); // #2749: allow notification ACKs before login',
+    find: PRELOGIN_ACK_FIND,
+    replace: PRELOGIN_ACK_REPLACE
   }
 ];
 
