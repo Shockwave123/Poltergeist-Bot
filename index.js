@@ -1450,11 +1450,8 @@ async function startBot(reason = 'startup') {
         }
 
         setupStatus = `Connection closed (${statusCode || 'unknown'}). Reconnecting...`;
-        if ([515, 503, 408, 428, 500, 502].includes(statusCode)) {
-          console.log(`⚠️ Connection closed (${statusCode}). Reconnecting...`);
-        } else {
-          console.log('Connection closed due to:', errorMessage);
-        }
+        const errorName = lastDisconnect?.error?.name;
+        console.warn(`⚠️ Connection closed (${statusCode || 'unknown'})${errorName ? ` ${errorName}` : ''}: ${errorMessage}. Reconnecting...`);
         scheduleReconnect(`close-${statusCode || 'unknown'}`, 2000);
       }
     });

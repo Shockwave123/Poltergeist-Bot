@@ -129,7 +129,7 @@ const COMPANION_UTILS_HELPERS = [
   ' */',
   'export const handleCompanionRegRefresh = (node, { creds, emitCredsUpdate, refreshQR, logger }) => {',
   '    if (!COMPANION_REG_REFRESH_CHILDREN.some(tag => getBinaryNodeChild(node, tag))) {',
-  "        logger.warn({ node }, 'companion_reg_refresh carries neither expected child; ignoring');",
+  "        console.warn('[baileys-patch] companion_reg_refresh had no recognized child; ignoring it.');",
   "        return 'ignored_malformed';",
   '    }',
   '    // WA Web rotates unconditionally; a registered session is the one case',
@@ -138,15 +138,13 @@ const COMPANION_UTILS_HELPERS = [
   '    // or pending pairing is verified against - re-minting it would break the',
   '    // session rather than refresh a pending registration.',
   '    if (creds.me) {',
-  "        logger.debug({ id: node.attrs.id }, 'companion_reg_refresh on a registered session; keeping the adv secret');",
+  "        console.info('[baileys-patch] companion_reg_refresh received after creds.me exists; preserving the active pairing credentials.');",
   "        return 'ignored_registered';",
   '    }',
   "    // Same construction as initAuthCreds: 32 CSPRNG bytes, base64.",
   "    creds.advSecretKey = randomBytes(32).toString('base64');",
   '    emitCredsUpdate({ advSecretKey: creds.advSecretKey });',
-  '    // warn (not info) so the rotation is visible in Render\'s logs at the bot',
-  "    // default `warn` log level - the key line when pairing is being debugged.",
-  "    logger.warn({ id: node.attrs.id }, 'rotated the adv secret the server asked to retire; re-rendering the pairing QR');",
+  "    console.warn('[baileys-patch] companion_reg_refresh received; rotated registration secret and refreshed the QR.');",
   '    refreshQR();',
   "    return 'rotated';",
   '};'
@@ -344,7 +342,7 @@ const applyBaileysPatch = ({ silent } = {}) => {
     log(`[baileys-patch] applied ${applied.length} edit(s):`);
     applied.forEach(r => log(`   - ${r.label}`));
   } else if (!failed.length) {
-    log('[baileys-patch] already patched (companion_reg_refresh fix present).');
+    log(`[baileys-patch] all ${EDITS.length} required rc14 pairing edits are already present.`);
   }
 
   return { ok: failed.length === 0, skipped: false, results };
