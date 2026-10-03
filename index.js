@@ -1394,12 +1394,12 @@ async function startBot(reason = 'startup') {
         if (!sessionId) sessionId = sessionManager.getSessionId() || null;
 
         // 2) Deliver the session id together with the welcome message (once per pairing)
-        if (config.sendWelcomeOnConnect && sessionId && sessionManager.needsWelcome(sessionId)) {
+        if (config.sendWelcomeOnConnect && sessionId && sessionManager.needsWelcome(sessionId, botNumber)) {
           try {
             if (await sendWelcomeMessage(sock, sessionId)) {
-              sessionManager.markWelcomeSent(sessionId);
+              sessionManager.markWelcomeSent(sessionId, botNumber);
               lastWelcomeSessionId = sessionId;
-              console.log('📩 Welcome message + session id delivered to the linked number.');
+              console.log('📩 First-link welcome message + session id delivered to the linked number.');
             }
           } catch (error) {
             console.error('Welcome message error:', error?.message || error);
@@ -1433,7 +1433,7 @@ async function startBot(reason = 'startup') {
         if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
           console.warn('⚠️ WhatsApp unlinked this device. Clearing the stored session so a new pairing can be made.');
           sessionManager.clearLocalCreds();
-          sessionManager.setState({ sessionId: '', authMethod: 'none', phoneNumber: '', lastWelcomedSessionId: '', pairingRequestedAt: 0 });
+          sessionManager.setState({ sessionId: '', authMethod: 'none', phoneNumber: '', lastWelcomedSessionId: '', welcomeSentForPhoneNumber: '', pairingRequestedAt: 0 });
           config.sessionID = '';
           latestQrDataUrl = null;
           latestQrIssuedAt = 0;

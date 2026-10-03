@@ -7,26 +7,7 @@ const path = require('path');
 const config = require('../../config');
 const packageInfo = require('../../package.json');
 const { loadCommands } = require('../../utils/commandLoader');
-
-const categoryLabels = {
-  general: '🧭 GENERAL',
-  ai: '🤖 AI',
-  anime: '👾 ANIME',
-  admin: '🛡️ ADMIN',
-  owner: '👑 OWNER',
-  media: '🎞️ MEDIA',
-  fun: '🎭 FUN',
-  economy: '💰 ECONOMY',
-  utility: '🔧 UTILITY',
-  textmaker: '🖋️ TEXTMAKER'
-};
-const categoryOrder = ['general', 'ai', 'anime', 'media', 'fun', 'economy', 'utility', 'textmaker', 'admin', 'owner'];
-
-const getUniqueCommands = (commands) => {
-  const uniqueCommands = new Map();
-  commands.forEach((command) => uniqueCommands.set(command.name, command));
-  return [...uniqueCommands.values()];
-};
+const { groupCommands } = require('../../utils/commandPresentation');
 
 module.exports = {
   name: 'menu',
@@ -37,45 +18,32 @@ module.exports = {
 
   async execute(sock, msg, args, extra) {
     try {
-      const commands = getUniqueCommands(loadCommands());
-      const categories = {};
-
-      commands.forEach((command) => {
-        const category = (command.category || 'other').toLowerCase();
-        if (!categories[category]) categories[category] = [];
-        categories[category].push(command);
+      const groups = groupCommands(loadCommands());
+      const commandCount = groups.reduce((total, group) => total + group.commands.length, 0);
+      const folderLines = groups.flatMap((group) => {
+        const names = group.commands.map((command) => `${config.prefix}${command.name}`);
+        const rows = [];
+        for (let index = 0; index < names.length; index += 7) {
+          rows.push(`  ${names.slice(index, index + 7).join('   ')}`);
+        }
+        return [`${group.icon} *${group.label}*`, ...rows, ''];
       });
 
       const ownerNames = Array.isArray(config.ownerName) ? config.ownerName : [config.ownerName];
       const displayOwner = ownerNames[0] || config.ownerName || 'Bot Owner';
       const senderName = extra.sender ? extra.sender.split('@')[0] : 'there';
 
-      let menuText = `╭━━『 *${config.botName}* 』━━╮\n\n`;
-      menuText += `👋 Hello @${senderName}!\n\n`;
-      menuText += `⚡ Prefix: ${config.prefix}\n`;
-      menuText += `📦 Total Commands: ${commands.length}\n`;
-      menuText += `👑 Owner: ${displayOwner}\n\n`;
-
-      Object.keys(categories).sort((first, second) => {
-        const firstIndex = categoryOrder.indexOf(first);
-        const secondIndex = categoryOrder.indexOf(second);
-        return (firstIndex === -1 ? categoryOrder.length : firstIndex) - (secondIndex === -1 ? categoryOrder.length : secondIndex);
-      }).forEach((category) => {
-        const label = categoryLabels[category] || `📂 ${category.toUpperCase()}`;
-        menuText += `┏━━━━━━━━━━━━━━━━━\n`;
-        menuText += `┃ ${label} COMMANDS\n`;
-        menuText += `┗━━━━━━━━━━━━━━━━━\n`;
-        categories[category].sort((first, second) => first.name.localeCompare(second.name));
-        categories[category].forEach((command) => {
-          const aliases = command.aliases?.length ? ` (${command.aliases.join(', ')})` : '';
-          menuText += `│ ➜ ${config.prefix}${command.name}${aliases}\n`;
-        });
-        menuText += '\n';
-      });
-
-      menuText += `╰━━━━━━━━━━━━━━━━━\n\n`;
-      menuText += `💡 Type ${config.prefix}help for command descriptions and usage.\n`;
-      menuText += `🌟 Bot Version: ${packageInfo.version}\n`;
+      const menuText = [
+        `╭─ *${config.botName}* ─╮`,
+        `👋 Hi @${senderName}`,
+        `Prefix: *${config.prefix}*  ·  *${commandCount} commands*`,
+        '',
+        '*COMMANDS BY FOLDER*',
+        ...folderLines,
+        `Use *${config.prefix}help <folder>* for descriptions and aliases.`,
+        `Use *${config.prefix}help <command>* for details.`,
+        `Owner: ${displayOwner}  ·  v${packageInfo.version}`
+      ].join('\n');
 
       const imagePath = path.join(__dirname, '../../utils/bot_image.jpg');
       if (fs.existsSync(imagePath)) {

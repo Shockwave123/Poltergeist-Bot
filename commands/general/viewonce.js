@@ -8,7 +8,7 @@ const { normalizeJidWithLid } = require('../../utils/jidHelper');
 
 module.exports = {
   name: 'viewonce',
-  aliases: ['readvo', 'read', 'vv', 'readviewonce'],
+  aliases: ['readvo', 'vv', 'readviewonce'],
   category: 'general',
   description: 'Reveal view-once messages and forward them to owner DM',
   usage: '.viewonce (reply to view-once message)',

@@ -18,8 +18,8 @@ module.exports = {
             const chatId = extra.from;
             
             // GitHub repository URL
-            const repoUrl = 'https://github.com/yourusername/poltergeist-md';
-            const apiUrl = 'https://api.github.com/repos/yourusername/poltergeist-md';
+            const repoUrl = 'https:// Nahhh i wont tell you';
+            const apiUrl = 'https:// Still wont tell you';
             
             // Send loading message
             const loadingMsg = await extra.reply('🔍 Fetching GitHub repository information...');
@@ -69,10 +69,10 @@ module.exports = {
                 let fallbackMessage = `╭━━『 *GitHub Repository* 』━━╮\n\n`;
                 fallbackMessage += `🤖 *Bot Name:* ${config.botName}\n`;
                 fallbackMessage += `🔗 *Repository:* Poltergeist MD\n`;
-                fallbackMessage += `👨‍💻 *Owner:* yourusername\n`;
+                fallbackMessage += `👨‍💻 *Owner:* The.Poltergeist\n`;
                 fallbackMessage += `🌐 *URL:* ${repoUrl}\n\n`;
                 fallbackMessage += `⚠️ *Note:* Unable to fetch real-time statistics.\n`;
-                fallbackMessage += `Please visit the repository directly for latest stats.\n\n`;
+                fallbackMessage += `Please Ask The.Poltergeist For his Github Repo if youre interested.\n\n`;
                 fallbackMessage += `╰━━━━━━━━━━━━━━━╯\n\n`;
                 fallbackMessage += `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}*`;
                 

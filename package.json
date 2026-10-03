@@ -40,6 +40,7 @@
         "mumaker": "^2.0.0",
         "node-fetch": "^2.7.0",
         "node-webpmux": "^3.1.7",
+        "pdf-parse": "1.1.1",
         "pino": "^9.0.0",
         "qrcode": "^1.5.3",
         "qrcode-terminal": "^0.12.0",

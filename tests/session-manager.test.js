@@ -148,12 +148,27 @@ suite('1. A truncated creds.json is still detected and quarantined', () => {
   check('isLinkedCreds() is false', () => {
     if (sessionManager.isLinkedCreds(sessionManager.readCredsRaw())) throw new Error('placeholder must not be linked');
   });
-  check('quarantineBrokenCreds() moves the file aside', () => {
-    if (!sessionManager.quarantineBrokenCreds()) throw new Error('quarantine returned false');
-    if (fs.existsSync(CREDS_FILE)) throw new Error('creds.json should no longer be loadable by Baileys');
-    const leftovers = fs.readdirSync(TMP_SESSION_DIR).filter((name) => name.includes('.broken-'));
-    if (leftovers.length !== 1) throw new Error(`expected 1 quarantined file, found ${leftovers.length}`);
-  });
+  const originalWarn = console.warn;
+  let quarantineWarning = '';
+  console.warn = (...args) => {
+    const message = args.map(String).join(' ');
+    if (message.includes('session/creds.json was unusable and has been quarantined')) {
+      quarantineWarning = message;
+      return;
+    }
+    originalWarn.apply(console, args);
+  };
+  try {
+    check('expected corrupt fixture is quarantined without a runtime warning', () => {
+      if (!sessionManager.quarantineBrokenCreds()) throw new Error('quarantine returned false');
+      if (fs.existsSync(CREDS_FILE)) throw new Error('creds.json should no longer be loadable by Baileys');
+      const leftovers = fs.readdirSync(TMP_SESSION_DIR).filter((name) => name.includes('.broken-'));
+      if (leftovers.length !== 1) throw new Error(`expected 1 quarantined file, found ${leftovers.length}`);
+      if (!quarantineWarning.includes('.broken-')) throw new Error('the expected quarantine warning was not emitted');
+    });
+  } finally {
+    console.warn = originalWarn;
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -290,6 +305,32 @@ suite('6. Previously saved credential shape remains supported', () => {
   });
   check('legacy linked credentials are retained', () => {
     if (!sessionManager.hasLocalCreds()) throw new Error('legacy linked credentials must be recognized');
+  });
+});
+
+suite('7. Session id is only welcomed once per linked phone', () => {
+  sessionManager.setState({
+    sessionId: '',
+    phoneNumber: '',
+    lastWelcomedSessionId: '',
+    welcomeSentForPhoneNumber: ''
+  });
+
+  check('first successful link needs a welcome', () => {
+    if (!sessionManager.needsWelcome('session-1', '2349131095067')) {
+      throw new Error('a newly linked phone must receive its first welcome');
+    }
+  });
+  check('credential refresh does not trigger another welcome', () => {
+    sessionManager.markWelcomeSent('session-1', '2349131095067');
+    if (sessionManager.needsWelcome('session-2', '2349131095067')) {
+      throw new Error('a changed session id must not trigger a duplicate welcome');
+    }
+  });
+  check('a different phone can receive its own first welcome', () => {
+    if (!sessionManager.needsWelcome('session-3', '2348000000000')) {
+      throw new Error('a different linked phone must be eligible for its first welcome');
+    }
   });
 });
 

@@ -54,10 +54,12 @@ ${globalKey ? '✅ Bot has a global fallback API key.' : '❌ Bot has no global 
 
 Try any of these AI commands:
 • ${extra.prefix || '.'}ai What is the speed of light?
-• ${extra.prefix || '.'}deepread (reply to an image/doc with a question)
+• ${extra.prefix || '.'}read (attach/reply to an image, PDF, TXT, or code file)
 • ${extra.prefix || '.'}summary 100 (summarize last 100 messages in a group)
+• ${extra.prefix || '.'}summarize https://example.com/article (summarize a public article link)
 • ${extra.prefix || '.'}roastai @someone
 • ${extra.prefix || '.'}transcribe (reply to a voice note)
+• ${extra.prefix || '.'}translate es Hello world --audio
 • ${extra.prefix || '.'}aikey test (run a diagnostic test)
 
 ───────────────────────────────────────────────────────────────
@@ -104,6 +106,10 @@ one, so AI commands keep working without any manual change.
 ✓ AI Chatbot replies on mention
 ✓ Voice note transcription (${extra.prefix || '.'}transcribe)
 ✓ Fun AI commands (${extra.prefix || '.'}roastai, ${extra.prefix || '.'}story, etc.)
+
+Other tools:
+• ${extra.prefix || '.'}remindme in 20 minutes to check the oven
+• ${extra.prefix || '.'}download https://example.com/file.mp4 (direct public media files only)
 `;
 
       await extra.reply(guide);

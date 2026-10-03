@@ -10,6 +10,7 @@ function registerRegistryCommands(commands, modulePath, label) {
     const list = require(modulePath);
     for (const cmd of list) {
       if (!cmd?.name) continue;
+      cmd.folder = label;
       commands.set(cmd.name, cmd);
       cmd.aliases?.forEach((alias) => commands.set(alias, cmd));
     }
@@ -46,6 +47,7 @@ const loadCommands = () => {
         try {
           const command = require(path.join(categoryPath, file));
           if (command.name) {
+            command.folder = category.toLowerCase();
             commands.set(command.name, command);
             if (command.aliases) {
               command.aliases.forEach(alias => {

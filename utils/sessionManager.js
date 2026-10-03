@@ -29,10 +29,13 @@ const DEFAULT_STATE = {
   linkedAt: 0,
   pairingRequestedAt: 0,
   lastWelcomedSessionId: '',
+  welcomeSentForPhoneNumber: '',
   updatedAt: 0
 };
 
 let cache = null;
+
+const normalizePhoneNumber = (value) => String(value || '').replace(/\D/g, '');
 
 const getSessionFolder = () => path.join(ROOT_DIR, config.sessionName || 'session');
 const getCredsFile = () => path.join(getSessionFolder(), 'creds.json');
@@ -55,7 +58,11 @@ const readState = () => {
   try {
     if (!fs.existsSync(STATE_FILE)) return { ...DEFAULT_STATE };
     const parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-    return { ...DEFAULT_STATE, ...(parsed && typeof parsed === 'object' ? parsed : {}) };
+    const state = { ...DEFAULT_STATE, ...(parsed && typeof parsed === 'object' ? parsed : {}) };
+    if (!state.welcomeSentForPhoneNumber && state.lastWelcomedSessionId && state.phoneNumber) {
+      state.welcomeSentForPhoneNumber = normalizePhoneNumber(state.phoneNumber);
+    }
+    return state;
   } catch (error) {
     console.error('[sessionManager] state read failed:', error.message);
     return { ...DEFAULT_STATE };
@@ -288,14 +295,22 @@ const previewSession = (sessionId) => {
   return `${value.slice(0, 18)}...${value.slice(-6)}`;
 };
 
-/** Welcome messages are only sent once per unique session id (no spam on redeploys). */
-const needsWelcome = (sessionId) => {
+/** Welcome/session delivery is once per linked WhatsApp number, not per credential refresh. */
+const needsWelcome = (sessionId, phoneNumber = '') => {
+  const state = getState();
+  const phone = normalizePhoneNumber(phoneNumber || state.phoneNumber);
+  if (phone) return normalizePhoneNumber(state.welcomeSentForPhoneNumber) !== phone;
   const id = sessionId || getSessionId();
-  if (!id) return false;
-  return getState().lastWelcomedSessionId !== id;
+  return Boolean(id && state.lastWelcomedSessionId !== id);
 };
 
-const markWelcomeSent = (sessionId) => setState({ lastWelcomedSessionId: sessionId || getSessionId() });
+const markWelcomeSent = (sessionId, phoneNumber = '') => {
+  const state = getState();
+  return setState({
+    lastWelcomedSessionId: sessionId || getSessionId(),
+    welcomeSentForPhoneNumber: normalizePhoneNumber(phoneNumber || state.phoneNumber)
+  });
+};
 
 /** Non-sensitive status block used by the setup page and the `.account` command. */
 const getStatus = () => {
@@ -313,7 +328,10 @@ const getStatus = () => {
     phoneNumber: state.phoneNumber,
     linkedAt: state.linkedAt,
     pairingRequestedAt: state.pairingRequestedAt,
-    welcomeSent: Boolean(state.sessionId) && state.lastWelcomedSessionId === state.sessionId
+    welcomeSent: Boolean(
+      (state.phoneNumber && normalizePhoneNumber(state.welcomeSentForPhoneNumber) === normalizePhoneNumber(state.phoneNumber)) ||
+      (state.sessionId && state.lastWelcomedSessionId === state.sessionId)
+    )
   };
 };
 
