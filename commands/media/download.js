@@ -30,6 +30,10 @@ module.exports = {
     if (!url) return extra.reply('Send a direct public HTTP(S) link to an audio, video, or image file. Social and streaming page links are not supported.');
 
     try {
+      const hostname = new URL(url).hostname.toLowerCase();
+      if (/(^|\.)(youtube\.com|youtu\.be|spotify\.com|instagram\.com|tiktok\.com|facebook\.com|fb\.watch)$/.test(hostname)) {
+        return extra.reply('That is a streaming/social page, not a direct media file. This bot does not extract streams from those platforms. Use the platform’s own export/download option, then send the resulting file or a direct authorized file URL.');
+      }
       const response = await fetchPublicUrl(url, { maxBytes: MAX_FILE_BYTES, accept: 'audio/*,video/*,image/*,application/octet-stream' });
       let mimeType = response.contentType.split(';')[0].trim();
       const filename = getFilename(response.url, response.headers['content-disposition']);

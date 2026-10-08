@@ -4,6 +4,8 @@
 
 const APIs = require('../../utils/api');
 const { sendVoiceNote } = require('../../utils/voiceNote');
+const { generateContent } = require('../../utils/googleAi');
+const { getKey } = require('../../utils/userApiKeys');
 
 module.exports = {
   name: 'translate',
@@ -25,8 +27,25 @@ module.exports = {
       
       await extra.reply('🔄 Translating...');
       
-      const result = await APIs.translate(text, targetLang);
-      const translated = result.translation || result;
+      let translated;
+      try {
+        const result = await APIs.translate(text, targetLang);
+        translated = result?.translation || result?.text || result;
+      } catch (translationError) {
+        translated = '';
+      }
+      if (typeof translated !== 'string' || !translated.trim()) {
+        translated = await generateContent([{
+          text: `Translate the text into language code ${targetLang}. Return only the translation, preserving meaning and tone.\n\n${text}`
+        }], {
+          apiKey: getKey(extra.sender),
+          senderId: extra.sender,
+          temperature: 0.2,
+          maxOutputTokens: 1200,
+          timeout: 45000
+        });
+      }
+      translated = String(translated).trim();
       
       let replyText = `🌐 *Translation*\n\n`;
       replyText += `📝 Original: ${text}\n`;

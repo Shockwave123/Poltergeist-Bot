@@ -5,18 +5,25 @@
 const fs = require('fs');
 const path = require('path');
 
-const STATE_FILE = path.join(__dirname, '../database/autochat.json');
+const STATE_FILE = process.env.AUTOCHAT_STATE_FILE || path.join(__dirname, '../database/autochat.json');
 const MAX_RECENT_MESSAGES = 20;
 
 function loadState() {
   try {
     if (fs.existsSync(STATE_FILE)) {
-      return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+      const parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+      return {
+        enabled: false,
+        chatId: null,
+        dmEnabled: false,
+        history: {},
+        ...(parsed && typeof parsed === 'object' ? parsed : {})
+      };
     }
   } catch (error) {
     console.error('[autochat] load error:', error.message);
   }
-  return { enabled: false, chatId: null };
+  return { enabled: false, chatId: null, dmEnabled: false, history: {} };
 }
 
 function saveState(state) {
@@ -37,16 +44,27 @@ function getActiveChat() {
 }
 
 function enable(chatId) {
-  const activeChat = getActiveChat();
+  const state = loadState();
+  const activeChat = state.enabled && state.chatId ? state.chatId : null;
   if (activeChat && activeChat !== chatId) {
     return { enabled: false, activeChat };
   }
-  saveState({ enabled: true, chatId });
+  saveState({ ...state, enabled: true, chatId });
   return { enabled: true, activeChat: chatId };
 }
 
 function disable() {
-  saveState({ enabled: false, chatId: null });
+  const state = loadState();
+  saveState({ ...state, enabled: false, chatId: null });
+}
+
+function isDmEnabled() {
+  return loadState().dmEnabled === true;
+}
+
+function setDmEnabled(enabled) {
+  const state = loadState();
+  return saveState({ ...state, dmEnabled: enabled === true });
 }
 
 function recordMessage(chatId, text) {
@@ -65,4 +83,4 @@ function getRecentMessages(chatId) {
   return [...(loadState().history?.[chatId] || [])];
 }
 
-module.exports = { getActiveChat, enable, disable, recordMessage, getRecentMessages };
+module.exports = { getActiveChat, enable, disable, isDmEnabled, setDmEnabled, recordMessage, getRecentMessages };

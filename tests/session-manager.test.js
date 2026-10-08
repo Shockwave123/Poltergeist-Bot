@@ -27,15 +27,18 @@ const ROOT_DIR = path.join(__dirname, '..');
 const TMP_SESSION_NAME = `session-test-${process.pid}`;
 const TMP_SESSION_DIR = path.join(ROOT_DIR, TMP_SESSION_NAME);
 const TMP_STATE_FILE = path.join(ROOT_DIR, 'database', `session-test-${process.pid}.json`);
+const TMP_AUTOCHAT_STATE_FILE = path.join(ROOT_DIR, 'database', `autochat-test-${process.pid}.json`);
 
 // Point both persistent paths at throwaway files BEFORE loading the module so the real
 // session/creds.json and database/session.json are never touched.
 process.env.SESSION_STATE_FILE = TMP_STATE_FILE;
+process.env.AUTOCHAT_STATE_FILE = TMP_AUTOCHAT_STATE_FILE;
 
 const config = require('../config');
 config.sessionName = TMP_SESSION_NAME;
 
 const sessionManager = require('../utils/sessionManager');
+const autoChat = require('../utils/autoChat');
 
 const CREDS_FILE = sessionManager.getCredsFile();
 
@@ -334,8 +337,36 @@ suite('7. Session id is only welcomed once per linked phone', () => {
   });
 });
 
+suite('8. Private-chat AI mode preserves other auto-chat state', () => {
+  fs.rmSync(TMP_AUTOCHAT_STATE_FILE, { force: true });
+
+  check('private-chat replies default to off', () => {
+    if (autoChat.isDmEnabled()) throw new Error('private-chat chatbot must be opt-in');
+  });
+  check('DM toggle persists', () => {
+    if (!autoChat.setDmEnabled(true) || !autoChat.isDmEnabled()) {
+      throw new Error('DM chatbot toggle was not persisted');
+    }
+  });
+  check('selected-chat mode preserves DM setting and history', () => {
+    autoChat.recordMessage('test-chat', 'remember this');
+    if (!autoChat.enable('test-chat').enabled) throw new Error('selected-chat mode did not enable');
+    if (!autoChat.isDmEnabled()) throw new Error('enabling selected-chat mode reset DM mode');
+    if (autoChat.getRecentMessages('test-chat')[0] !== 'remember this') {
+      throw new Error('enabling selected-chat mode erased history');
+    }
+    autoChat.disable();
+    if (!autoChat.isDmEnabled()) throw new Error('disabling selected-chat mode reset DM mode');
+  });
+  check('DM mode can be turned back off', () => {
+    autoChat.setDmEnabled(false);
+    if (autoChat.isDmEnabled()) throw new Error('DM chatbot did not turn off');
+  });
+});
+
 // ---------------------------------------------------------------------------
 resetSessionFolder();
+fs.rmSync(TMP_AUTOCHAT_STATE_FILE, { force: true });
 
 console.log(`\n${failures === 0 ? '✅ all checks passed' : `❌ ${failures} check(s) failed`} (${checks} assertions)`);
 if (failures > 0) process.exitCode = 1;

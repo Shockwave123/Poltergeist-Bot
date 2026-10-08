@@ -9,21 +9,34 @@ module.exports = {
   name: 'autochat',
   aliases: ['continuouschat', 'chatmode'],
   category: 'owner',
-  description: 'Keep the chatbot active in one selected chat',
-  usage: '.autochat <on/off>',
+  description: 'Enable continuous chat in this chat or AI replies to private messages',
+  usage: '.autochat [on/off|dm on/off]',
   ownerOnly: true,
 
   async execute(sock, msg, args, extra) {
     const option = (args[0] || '').toLowerCase();
     const chatId = extra.from;
 
+    if (option === 'dm') {
+      const dmOption = (args[1] || '').toLowerCase();
+      if (!['on', 'off'].includes(dmOption)) {
+        return extra.reply(`Private-chat AI replies are ${autoChat.isDmEnabled() ? 'on' : 'off'}. Use ".autochat dm on" or ".autochat dm off".`);
+      }
+      autoChat.setDmEnabled(dmOption === 'on');
+      return extra.reply(dmOption === 'on'
+        ? '✅ AI replies are on for private messages from other people. The owner can turn this off with `.autochat dm off`.'
+        : '✅ AI replies to private messages are off.');
+    }
+
     if (!option) {
       const activeChat = autoChat.getActiveChat();
       return extra.reply(
         `*CONTINUOUS CHAT*\n\nStatus: ${activeChat ? '✅ On' : '❌ Off'}\n` +
+        `Private-chat replies: ${autoChat.isDmEnabled() ? '✅ On' : '❌ Off'}\n` +
         `${activeChat ? `Active chat: ${activeChat === chatId ? 'this chat' : 'another chat'}\n` : ''}\n` +
         `Use *.autochat on* to start in this chat.\n` +
-        `Use *.autochat off* to stop it.`
+        `Use *.autochat off* to stop it.\n` +
+        `Use *.autochat dm on/off* to control private-chat replies.`
       );
     }
 

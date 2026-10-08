@@ -894,6 +894,11 @@ const handleMessage = async (sock, msg) => {
       return;
     }
 
+    if (!msg.key.fromMe && !isGroup && !isOwner(sender) && autoChat.isDmEnabled() && body && !body.startsWith(config.prefix)) {
+      await chatbotCmd.handleChat(sock, msg, body, sender);
+      return;
+    }
+
     // AFK — one-time reply when owner is away (groups + DMs)
     if (!msg.key.fromMe) {
       const afk = require('./utils/afk');
