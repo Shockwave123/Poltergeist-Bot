@@ -920,6 +920,10 @@ async function runHealthCheck() {
       try { cleanupOldFiles(); } catch (error) { /* ignore */ }
       try { handler.clearCaches(); } catch (error) { /* ignore */ }
       store.messages.clear();
+      // Try a V8 GC pass first (available when started with --expose-gc)
+      if (typeof global.gc === 'function') {
+        try { global.gc(); } catch (error) { /* ignore */ }
+      }
       await delay(1500);
       const afterMb = process.memoryUsage().rss / (1024 * 1024);
       if (afterMb > config.health.memoryLimitMb) {
@@ -1691,6 +1695,7 @@ async function gracefulShutdown(signal) {
     reconnectTimer = null;
   }
   try {
+    if (typeof global.gc === 'function') global.gc();
     if (sessionManager.hasLocalCreds()) persistSession('shutdown');
   } catch (error) { /* ignore */ }
   try { stopCleanup(); } catch (error) { /* ignore */ }

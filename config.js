@@ -107,7 +107,7 @@ module.exports = {
     },
     
     // Timezone
-    timezone: 'Asia/Kolkata',
+    timezone: 'Africa/Lagos',
     
     // Limits
     maxWarnings: 3,

@@ -1,5 +1,7 @@
 const fs = require('fs');
 const path = require('path');
+const moment = require('moment-timezone');
+const config = require('../config');
 
 const DB_PATH = path.join(__dirname, '../database/groupStats.json');
 
@@ -22,8 +24,9 @@ function saveDB(data) {
 
 function addMessage(groupId, senderId, opts = {}) {
   const db = loadDB();
-  const today = new Date().toISOString().slice(0, 10);
-  const hour = new Date().getHours();
+  const localNow = moment().tz(config.timezone);
+  const today = localNow.format('YYYY-MM-DD');
+  const hour = Number(localNow.format('H'));
 
   if (!db[groupId]) db[groupId] = {};
   if (!db[groupId][today]) {
@@ -68,7 +71,7 @@ function addMessage(groupId, senderId, opts = {}) {
 
 function getStats(groupId) {
   const db = loadDB();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = moment().tz(config.timezone).format('YYYY-MM-DD');
   if (!db[groupId] || !db[groupId][today]) return null;
   return db[groupId][today];
 }
@@ -79,12 +82,10 @@ function getWeeklyStats(groupId) {
 
   const users = {};
   let total = 0;
-  const now = new Date();
+  const now = moment().tz(config.timezone);
 
   for (let i = 0; i < 7; i++) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
+    const key = now.clone().subtract(i, 'days').format('YYYY-MM-DD');
     const day = db[groupId][key];
     if (!day) continue;
     total += day.total || 0;

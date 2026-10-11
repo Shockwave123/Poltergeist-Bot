@@ -3,6 +3,7 @@
  */
 
 const axios = require('axios');
+const { resolvePublicHost } = require('./webContent');
 
 const api = axios.create({
   timeout: 30000,
@@ -463,31 +464,34 @@ const APIs = {
   // Screenshot Website API
   screenshotWebsite: async (url) => {
     try {
-      const apiUrl = `https://eliteprotech-apis.zone.id/ssweb?url=${encodeURIComponent(url)}`;
+      const target = new URL(url);
+      if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) {
+        throw new Error('Only public HTTP(S) web pages can be screenshotted.');
+      }
+      if (!['', '80', '443'].includes(target.port)) {
+        throw new Error('Only standard public web ports can be screenshotted.');
+      }
+      await resolvePublicHost(target.hostname);
+      const apiUrl = `https://image.thum.io/get/width/1200/crop/900/noanimate/${target.href}`;
       const response = await axios.get(apiUrl, {
-        timeout: 30000,
+        timeout: 60000,
         responseType: 'arraybuffer',
+        maxContentLength: 8 * 1024 * 1024,
         headers: {
-          'accept': '*/*',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          accept: 'image/png,image/jpeg,image/webp',
+          'User-Agent': 'PoltergeistBot/1.0'
         }
       });
-      
-      // Return the image buffer directly (API returns PNG binary)
-      if (response.headers['content-type']?.includes('image')) {
-        return Buffer.from(response.data);
-      }
-      
-      // If API returns JSON with URL, try to parse it
-      try {
-        const data = JSON.parse(Buffer.from(response.data).toString());
-        return data.url || data.data?.url || data.image || apiUrl;
-      } catch (e) {
-        // If not JSON, assume it's image data and return buffer
-        return Buffer.from(response.data);
-      }
+      const buffer = Buffer.from(response.data);
+      const contentType = String(response.headers['content-type'] || '').toLowerCase();
+      const isImage = contentType.startsWith('image/') ||
+        (buffer[0] === 0x89 && buffer.subarray(1, 4).toString() === 'PNG') ||
+        (buffer[0] === 0xff && buffer[1] === 0xd8) ||
+        (buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP');
+      if (!isImage || !buffer.length) throw new Error('Screenshot provider did not return an image.');
+      return buffer;
     } catch (error) {
-      throw new Error('Failed to take screenshot');
+      throw new Error(`Screenshot failed: ${error.message}`);
     }
   },
   

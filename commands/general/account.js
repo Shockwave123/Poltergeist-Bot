@@ -3,6 +3,7 @@
  */
 
 const config = require('../../config');
+const moment = require('moment-timezone');
 const sessionManager = require('../../utils/sessionManager');
 const packageInfo = require('../../package.json');
 
@@ -41,7 +42,7 @@ module.exports = {
 
       const state = sessionManager.getState();
       const status = sessionManager.getStatus();
-      const linkedAt = state.linkedAt ? new Date(state.linkedAt).toLocaleString() : 'unknown';
+      const linkedAt = state.linkedAt ? moment(state.linkedAt).tz(config.timezone).format('MMM D, YYYY h:mm A z') : 'unknown';
       const sessionSize = sessionManager.getSessionId().length;
 
       const lines = [

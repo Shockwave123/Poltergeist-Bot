@@ -8,6 +8,7 @@
 
 const config = require('../../config');
 const sessionManager = require('../../utils/sessionManager');
+const moment = require('moment-timezone');
 
 const numberFromJid = (jid) => String(jid || '').split(':')[0].split('@')[0];
 
@@ -37,7 +38,7 @@ module.exports = {
           `│ creds.json on disk: ${status.credsOnDisk ? '✅ yes' : '❌ no'}`,
           `│ Link method: *${status.authMethod}*`,
           `│ Linked number: ${state.phoneNumber || 'unknown'}`,
-          `│ Linked at: ${state.linkedAt ? new Date(state.linkedAt).toLocaleString() : 'unknown'}`,
+          `│ Linked at: ${state.linkedAt ? moment(state.linkedAt).tz(config.timezone).format('MMM D, YYYY h:mm A z') : 'unknown'}`,
           `│ Preview: ${status.sessionPreview}`,
           `│ Welcome sent: ${status.welcomeSent ? '✅' : '⏳'}`,
           '│',

@@ -20,9 +20,17 @@ module.exports = {
       }
       
       const city = args.join(' ');
-      const apiKey = '4902c0f2550f58298ad4146a92b65e10';
+      const apiKey = process.env.OPENWEATHER_API_KEY;
+      if (!apiKey) {
+        return sock.sendMessage(msg.key.remoteJid, {
+          text: 'Weather is not configured yet. Add `OPENWEATHER_API_KEY` in the Render environment settings.'
+        }, { quoted: msg });
+      }
       
-      const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric`);
+      const response = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
+        params: { q: city, appid: apiKey, units: 'metric' },
+        timeout: 12000
+      });
       const weather = response.data;
       
       const weatherText = `Weather in ${weather.name}: ${weather.weather[0].description}. Temperature: ${weather.main.temp}°C.`;

@@ -6,37 +6,52 @@ const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { transcribeAudio } = require('../../utils/speechToText');
 const { getKey } = require('../../utils/userApiKeys');
 
-function getContextInfo(message) {
-  return message.message?.extendedTextMessage?.contextInfo
-    || message.message?.buttonsResponseMessage?.contextInfo
-    || message.message?.listResponseMessage?.contextInfo;
+function unwrapMessage(message) {
+  let content = message || {};
+  for (let depth = 0; depth < 5; depth += 1) {
+    const inner = content.ephemeralMessage?.message ||
+      content.viewOnceMessage?.message ||
+      content.viewOnceMessageV2?.message ||
+      content.documentWithCaptionMessage?.message;
+    if (!inner) break;
+    content = inner;
+  }
+  return content;
 }
 
 module.exports = {
   name: 'transcribe',
   aliases: ['stt', 'totext', 'voicetotext', 'voicetotxt'],
   category: 'general',
-  description: 'Convert a quoted voice note into text',
-  usage: '.transcribe (reply to a voice note)',
+  description: 'Transcribe an attached or replied-to audio recording',
+  usage: '.transcribe (attach/reply to audio)',
 
   async execute(sock, msg, args, extra) {
     try {
-      const contextInfo = getContextInfo(msg);
-      const quotedMessage = contextInfo?.quotedMessage;
-      const audioMessage = quotedMessage?.audioMessage;
+      const current = unwrapMessage(msg.message);
+      const contextInfo = current.extendedTextMessage?.contextInfo
+        || current.buttonsResponseMessage?.contextInfo
+        || current.listResponseMessage?.contextInfo;
+      const quotedMessage = unwrapMessage(contextInfo?.quotedMessage);
+      const currentAudio = current.audioMessage || (current.documentMessage?.mimetype?.startsWith('audio/') ? current.documentMessage : null);
+      const quotedAudio = quotedMessage.audioMessage || (quotedMessage.documentMessage?.mimetype?.startsWith('audio/') ? quotedMessage.documentMessage : null);
+      const selectedMessage = currentAudio ? current : quotedMessage;
+      const audioMessage = currentAudio || quotedAudio;
 
-      if (!quotedMessage || !audioMessage) {
-        return extra.reply('Reply to a voice note with `.transcribe` and I will turn it into text.');
+      if (!audioMessage) {
+        return extra.reply('Attach or reply to an audio file with `.transcribe` and I will turn it into text.');
       }
 
-      const targetMessage = {
-        key: {
-          remoteJid: extra.from,
-          id: contextInfo.stanzaId,
-          participant: contextInfo.participant,
-        },
-        message: quotedMessage,
-      };
+      const targetMessage = currentAudio
+        ? { key: msg.key, message: selectedMessage }
+        : {
+          key: {
+            remoteJid: extra.from,
+            id: contextInfo.stanzaId,
+            participant: contextInfo.participant,
+          },
+          message: selectedMessage,
+        };
 
       await extra.react('🎧');
       const audioBuffer = await downloadMediaMessage(
@@ -53,8 +68,8 @@ module.exports = {
       const text = await transcribeAudio(
         audioBuffer,
         audioMessage.fileName || 'voice.ogg',
-        audioMessage.mimetype || 'audio/ogg',
-        { apiKey: getKey(extra.sender) },
+        audioMessage.mimetype || (audioMessage.ptt ? 'audio/ogg' : 'audio/mpeg'),
+        { apiKey: getKey(extra.sender), senderId: extra.sender },
       );
 
       await extra.reply(`📝 ${text}`);

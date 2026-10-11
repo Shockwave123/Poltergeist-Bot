@@ -1,12 +1,11 @@
-const FOLDER_ORDER = ['general', 'ai', 'anime', 'media', 'fun', 'economy', 'utility', 'textmaker', 'admin', 'owner'];
+const FOLDER_ORDER = ['general', 'ai', 'anime', 'downloaders', 'fun', 'utility', 'textmaker', 'admin', 'owner'];
 
 const FOLDER_DETAILS = {
   general: { label: 'GENERAL', icon: '🧭' },
   ai: { label: 'AI', icon: '🤖' },
   anime: { label: 'ANIME', icon: '👾' },
-  media: { label: 'MEDIA', icon: '🎞️' },
+  downloaders: { label: 'DOWNLOADERS', icon: '📥' },
   fun: { label: 'FUN', icon: '🎭' },
-  economy: { label: 'ECONOMY', icon: '💰' },
   utility: { label: 'UTILITY', icon: '🔧' },
   textmaker: { label: 'TEXTMAKER', icon: '🖋️' },
   admin: { label: 'ADMIN', icon: '🛡️' },

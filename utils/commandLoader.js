@@ -23,8 +23,8 @@ function registerFunCommands(commands) {
   registerRegistryCommands(commands, './funCommands', 'fun');
 }
 
-function registerEconomyCommands(commands) {
-  registerRegistryCommands(commands, './economyCommands', 'economy');
+function registerDownloaderCommands(commands) {
+  registerRegistryCommands(commands, './downloaderCommands', 'downloaders');
 }
 
 const loadCommands = () => {
@@ -47,7 +47,7 @@ const loadCommands = () => {
         try {
           const command = require(path.join(categoryPath, file));
           if (command.name) {
-            command.folder = category.toLowerCase();
+            command.folder = category.toLowerCase() === 'media' ? 'downloaders' : category.toLowerCase();
             commands.set(command.name, command);
             if (command.aliases) {
               command.aliases.forEach(alias => {
@@ -63,9 +63,9 @@ const loadCommands = () => {
   });
   
   registerFunCommands(commands);
-  registerEconomyCommands(commands);
+  registerDownloaderCommands(commands);
   return commands;
 };
 
-module.exports = { loadCommands, registerFunCommands, registerEconomyCommands };
+module.exports = { loadCommands, registerFunCommands, registerDownloaderCommands };
 

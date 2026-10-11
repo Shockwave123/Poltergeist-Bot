@@ -11,7 +11,7 @@ const { groupCommands } = require('../../utils/commandPresentation');
 
 module.exports = {
   name: 'menu',
-  aliases: ['commands'],
+  aliases: ['commands', 'menufull'],
   category: 'general',
   description: 'Show all available commands',
   usage: '.menu',

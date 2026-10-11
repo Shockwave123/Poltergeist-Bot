@@ -1,90 +1,48 @@
-/**
- * GitHub Command - Show bot GitHub repository and stats
- */
-
 const axios = require('axios');
 const config = require('../../config');
+
+function getRepositoryCoordinates(value) {
+    try {
+        const url = new URL(value);
+        if (url.hostname.toLowerCase() !== 'github.com') return null;
+        const [owner, repository] = url.pathname.split('/').filter(Boolean);
+        if (!owner || !repository || /yourusername|yourrepository/i.test(`${owner}/${repository}`)) return null;
+        return { owner, repository: repository.replace(/\.git$/i, '') };
+    } catch (error) {
+        return null;
+    }
+}
 
 module.exports = {
     name: 'github',
     aliases: ['repo', 'git', 'source', 'sc', 'script'],
     category: 'general',
-    description: 'Show bot GitHub repository and statistics',
-    usage: '.github',
-    ownerOnly: false,
+    description: 'Show the configured GitHub repository and public statistics',
+    usage: '.repo',
 
     async execute(sock, msg, args, extra) {
+        const repoUrl = process.env.GITHUB_REPO_URL || config.social?.github || '';
+        const coordinates = getRepositoryCoordinates(repoUrl);
+        if (!coordinates) {
+            return extra.reply('Repository link is not configured. Set `GITHUB_REPO_URL` in Render to a public GitHub repository URL.');
+        }
+
         try {
-            const chatId = extra.from;
-            
-            // GitHub repository URL
-            const repoUrl = 'https:// Nahhh i wont tell you';
-            const apiUrl = 'https:// Still wont tell you';
-            
-            // Send loading message
-            const loadingMsg = await extra.reply('🔍 Fetching GitHub repository information...');
-            
-            try {
-                // Fetch repository data from GitHub API
-                const response = await axios.get(apiUrl, {
-                    headers: {
-                        'User-Agent': 'PoltergeistMD'
-                    }
-                });
-                
-                const repo = response.data;
-                
-                // Format the response with proper styling
-                let message = `╭━━『 *GitHub Repository* 』━━╮\n\n`;
-                message += `🤖 *Bot Name:* ${config.botName}\n`;
-                message += `🔗 *Repository:* ${repo.name}\n`;
-                message += `👨‍💻 *Owner:* ${repo.owner.login}\n`;
-                message += `📄 *Description:* ${repo.description || 'No description provided'}\n`;
-                message += `🌐 *URL:* ${repo.html_url}\n\n`;
-                
-                message += `📊 *Repository Statistics*\n`;
-                message += `⭐ *Stars:* ${repo.stargazers_count.toLocaleString()}\n`;
-                message += `🍴 *Forks:* ${repo.forks_count.toLocaleString()}\n`;
-                message += `👁️ *Watchers:* ${repo.watchers_count.toLocaleString()}\n`;
-                message += `📦 *Size:* ${(repo.size / 1024).toFixed(2)} MB\n\n`;
-                
-                message += `🔗 *Quick Links*\n`;
-                message += `⭐ Star: ${repo.html_url}/stargazers\n`;
-                message += `🍴 Fork: ${repo.html_url}/fork\n`;
-                message += `📥 Clone: git clone ${repo.clone_url}\n\n`;
-                
-                message += `╰━━━━━━━━━━━━━━━╯\n\n`;
-                message += `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}*`;
-                
-                // Edit the loading message with the actual data
-                await sock.sendMessage(chatId, {
-                    text: message,
-                    edit: loadingMsg.key
-                });
-                
-            } catch (apiError) {
-                // Fallback message if API fails
-                console.error('GitHub API Error:', apiError.message);
-                
-                let fallbackMessage = `╭━━『 *GitHub Repository* 』━━╮\n\n`;
-                fallbackMessage += `🤖 *Bot Name:* ${config.botName}\n`;
-                fallbackMessage += `🔗 *Repository:* Poltergeist MD\n`;
-                fallbackMessage += `👨‍💻 *Owner:* The.Poltergeist\n`;
-                fallbackMessage += `🌐 *URL:* ${repoUrl}\n\n`;
-                fallbackMessage += `⚠️ *Note:* Unable to fetch real-time statistics.\n`;
-                fallbackMessage += `Please Ask The.Poltergeist For his Github Repo if youre interested.\n\n`;
-                fallbackMessage += `╰━━━━━━━━━━━━━━━╯\n\n`;
-                fallbackMessage += `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}*`;
-                
-                await sock.sendMessage(chatId, {
-                    text: fallbackMessage,
-                    edit: loadingMsg.key
-                });
-            }
-            
+            const apiUrl = `https://api.github.com/repos/${encodeURIComponent(coordinates.owner)}/${encodeURIComponent(coordinates.repository)}`;
+            const response = await axios.get(apiUrl, {
+                timeout: 10000,
+                headers: { 'User-Agent': 'PoltergeistMD', accept: 'application/vnd.github+json' }
+            });
+            const repo = response.data;
+            return extra.reply([
+                `📦 *${repo.full_name}*`,
+                repo.description || 'No description provided.',
+                `⭐ ${repo.stargazers_count.toLocaleString()} stars  ·  🍴 ${repo.forks_count.toLocaleString()} forks`,
+                repo.html_url
+            ].join('\n'));
         } catch (error) {
-            console.error('GitHub command error:', error);
-            await extra.reply(`❌ Error: ${error.message}`);
+            const reason = error.response?.status === 404 ? 'repository not found or private' : error.message;
+            return extra.reply(`Could not load repository details: ${reason}`);
         }
     }
 };

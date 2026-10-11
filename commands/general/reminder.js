@@ -76,7 +76,7 @@ module.exports = {
 
     const parsed = parseReminder(args);
     if (!parsed) {
-      return extra.reply('Use `.remindme in 20 minutes to check the oven`, `.remindme call Mum at 18:30`, or `.remind YYYY-MM-DD HH:mm <task>`. Times use Asia/Kolkata.');
+      return extra.reply(`Use ".remindme in 20 minutes to check the oven", ".remindme call Mum at 18:30", or ".remind YYYY-MM-DD HH:mm <task>". Times use ${config.timezone}.`);
     }
     const { at: timestamp, text } = parsed;
     if (!Number.isFinite(timestamp) || timestamp <= Date.now()) {

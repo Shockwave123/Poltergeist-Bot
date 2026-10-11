@@ -6,7 +6,6 @@ const config = require('./config');
 const database = require('./database');
 const { loadCommands } = require('./utils/commandLoader');
 const { addMessage } = require('./utils/groupstats');
-const { tryAutoLevelUp, formatLevelUpMessage } = require('./utils/economy');
 const { jidDecode, jidEncode } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const path = require('path');
@@ -432,10 +431,6 @@ const handleMessage = async (sock, msg) => {
     
     // Auto-React System
     try {
-      // Clear cache to get fresh config values
-      delete require.cache[require.resolve('./config')];
-      const config = require('./config');
-
       if (config.autoReact && msg.message && !msg.key.fromMe) {
         const content = msg.message.ephemeralMessage?.message || msg.message;
         const text =
@@ -513,21 +508,6 @@ const handleMessage = async (sock, msg) => {
       }
     }
     
-    // Anti-group mention protection (check BEFORE prefix check, as these are non-command messages)
-    if (isGroup) {
-      // Debug logging to confirm we're trying to call the handler
-      const groupSettings = database.getGroupSettings(from);
-      // Debug log removed
-      if (groupSettings.antigroupmention) {
-        // Debug log removed
-      }
-      try {
-        await handleAntigroupmention(sock, msg, groupMetadata);
-      } catch (error) {
-        console.error('Error in antigroupmention handler:', error);
-      }
-    }
-    
     // Track group message statistics
     if (isGroup) {
       const ctx = content?.extendedTextMessage?.contextInfo;
@@ -536,25 +516,6 @@ const handleMessage = async (sock, msg) => {
         sticker: !!(content?.stickerMessage || msg.message?.stickerMessage),
       });
 
-      // Auto level-up when enough XP (economy ranks)
-      if (!msg.key.fromMe) {
-        try {
-          const levelResult = tryAutoLevelUp(from, sender);
-          if (levelResult.leveled) {
-            await sock.sendMessage(from, {
-              text: formatLevelUpMessage(
-                levelResult.before,
-                levelResult.after,
-                levelResult.role,
-                levelResult.diamondsEarned
-              ),
-              mentions: [sender],
-            }, { quoted: msg });
-          }
-        } catch (e) {
-          // ignore autolevel errors
-        }
-      }
     }
     
     // Return early for non-group messages with no recognizable content
@@ -753,13 +714,8 @@ const handleMessage = async (sock, msg) => {
       }
     }
     
-    // Anti-group mention protection (check BEFORE prefix check, as these are non-command messages)
+    // Anti-group mention protection
     if (isGroup) {
-      // Debug logging to confirm we're trying to call the handler
-      const groupSettings = database.getGroupSettings(from);
-      if (groupSettings.antigroupmention) {
-        // Debug log removed
-      }
       try {
         await handleAntigroupmention(sock, msg, groupMetadata);
       } catch (error) {
