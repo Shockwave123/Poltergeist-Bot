@@ -40,8 +40,8 @@ module.exports = {
           return await sock.sendMessage(chatId, {
             text: `*TRANSLATOR*\n\n` +
             `Usage:\n` +
-            `1. Reply to a message with: .translate <lang> or .trt <lang>\n` +
-            `2. Or type: .translate <text> <lang> or .trt <text> <lang>\n\n` +
+            `• Reply to a message with: .translate <lang> or .trt <lang>\n` +
+            `• Or type: .translate <text> <lang> or .trt <text> <lang>\n\n` +
             `Example:\n` +
             `.translate hello fr\n` +
             `.trt hello fr\n\n` +

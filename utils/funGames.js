@@ -196,11 +196,11 @@ const hangmanCmd = {
 };
 
 const quizCmd = {
-  name: 'quiz',
-  aliases: ['trivia'],
+  name: 'trivia',
+  aliases: ['funquiz'],
   category: 'fun',
   description: 'Quick quiz',
-  usage: '.quiz',
+  usage: '.trivia',
   async execute(sock, msg, args, extra) {
     try {
       cleanupMap(quizGames);

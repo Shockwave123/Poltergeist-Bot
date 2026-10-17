@@ -155,11 +155,11 @@ const pairCommands = [
     text: (a, b) => `💔 *DIVORCE PAPERS*\n\n${a} ❌ ${b}\n\nReason: irreconcilable memes.`,
   }),
   {
-    name: 'vs',
-    aliases: ['compare', 'battle'],
+    name: 'battle',
+    aliases: ['compare'],
     category: 'fun',
     description: 'Compare two users',
-    usage: '.vs @user1 @user2',
+    usage: '.battle @user1 @user2',
     groupOnly: true,
     async execute(sock, msg, args, extra) {
       try {
@@ -523,7 +523,7 @@ const aiCommands = [
     if (!args.length) return null;
     return `Write a funny 3-line story about: ${args.join(' ')}`;
   }),
-  makeAiCmd('debate', ['hotake'], '<topic>', (args) => {
+  makeAiCmd('hotake', ['chaostake'], '<topic>', (args) => {
     if (!args.length) return null;
     return `Give a chaotic hot take about "${args.join(' ')}" in 2 sentences. Be funny.`;
   }),

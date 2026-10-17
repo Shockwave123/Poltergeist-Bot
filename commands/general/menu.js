@@ -21,7 +21,7 @@ module.exports = {
       const groups = groupCommands(loadCommands());
       const commandCount = groups.reduce((total, group) => total + group.commands.length, 0);
       const folderLines = groups.flatMap((group) => {
-        const names = group.commands.map((command) => `${config.prefix}${command.name}`);
+        const names = group.commands.map((command) => `• ${config.prefix}${command.name}`);
         const rows = [];
         for (let index = 0; index < names.length; index += 7) {
           rows.push(`  ${names.slice(index, index + 7).join('   ')}`);

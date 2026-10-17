@@ -28,7 +28,7 @@ async function uploadToUguu(buffer, filename = 'image.jpg') {
 
 module.exports = {
   name: 'gptimage',
-  aliases: ['gptimg', 'editimage', 'aiimage', 'vision','gi'],
+  aliases: ['gptimg', 'editimage', 'aiimage', 'gi'],
   category: 'ai',
   description: 'Edit image using AI Image Editor (MagicEraser) with a prompt',
   usage: '.gptimage <prompt> (reply to image/sticker)',

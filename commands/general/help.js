@@ -53,7 +53,7 @@ module.exports = {
           `Prefix: *${config.prefix}*  ·  *${commandCount} commands*`,
           '',
           '*COMMAND FOLDERS*',
-          ...groups.map((entry) => `${entry.icon} *${entry.label}*  ·  ${entry.commands.length}`),
+          ...groups.map((entry) => `• ${entry.icon} *${entry.label}*  ·  ${entry.commands.length}`),
           '',
           `Browse a folder: *${config.prefix}help <folder> [page]*`,
           `View one command: *${config.prefix}help <command>*`,

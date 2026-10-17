@@ -62,10 +62,10 @@ function cleanName(title) {
 /* ------------------------------ YouTube ------------------------------ */
 
 const INNERTUBE_CLIENTS = [
-  { name: 'WEB', context: { clientName: 'WEB', clientVersion: '2.20240304.00.00', hl: 'en', gl: 'US' }, key: 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8' },
-  { name: 'ANDROID', context: { clientName: 'ANDROID', clientVersion: '19.09.37', androidSdkVersion: 30, hl: 'en', gl: 'US' }, key: 'AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w' },
-  { name: 'IOS', context: { clientName: 'IOS', clientVersion: '19.09.3', deviceMake: 'Apple', deviceModel: 'iPhone16,2', hl: 'en', gl: 'US' }, key: 'AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc' },
-  { name: 'TVHTML5', context: { clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER', clientVersion: '2.0', hl: 'en', gl: 'US' }, key: 'AIzaSyDCU8hBy_m-8Ed1SUUoVAkywOz2IMwClMw' }
+  { name: 'WEB', context: { clientName: 'WEB', clientVersion: '2.20240304.00.00', hl: 'en', gl: 'US' }, key: process.env.YOUTUBE_API_KEY_WEB || 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8' },
+  { name: 'ANDROID', context: { clientName: 'ANDROID', clientVersion: '19.09.37', androidSdkVersion: 30, hl: 'en', gl: 'US' }, key: process.env.YOUTUBE_API_KEY_ANDROID || 'AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w' },
+  { name: 'IOS', context: { clientName: 'IOS', clientVersion: '19.09.3', deviceMake: 'Apple', deviceModel: 'iPhone16,2', hl: 'en', gl: 'US' }, key: process.env.YOUTUBE_API_KEY_IOS || 'AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc' },
+  { name: 'TVHTML5', context: { clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER', clientVersion: '2.0', hl: 'en', gl: 'US' }, key: process.env.YOUTUBE_API_KEY_TV || 'AIzaSyDCU8hBy_m-8Ed1SUUoVAkywOz2IMwClMw' }
 ];
 
 function decodeSignature(scrambled) {
@@ -249,9 +249,36 @@ async function tiktokDownload(url) {
 
 /* ------------------------------ Spotify ------------------------------ */
 
+function cleanSpotifyUrl(url) {
+  try {
+    const u = new URL(url);
+    u.searchParams.delete('si');
+    u.searchParams.delete('utm_source');
+    u.searchParams.delete('utm_medium');
+    u.searchParams.delete('utm_campaign');
+    u.searchParams.delete('dl');
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 async function spotifyResolve(url) {
-  const oembed = await HTTP.get('https://open.spotify.com/oembed', { params: { url } });
-  const title = oembed.data?.title || 'Spotify track';
+  const cleanUrl = cleanSpotifyUrl(url);
+
+  let title = 'Spotify track';
+  try {
+    const oembed = await HTTP.get('https://open.spotify.com/oembed', {
+      params: { url: cleanUrl },
+      headers: { Accept: 'application/json' },
+    });
+    if (oembed.data && typeof oembed.data === 'object' && oembed.data.title) {
+      title = oembed.data.title;
+    }
+  } catch {
+    // oEmbed failed — fall through to itunes search
+  }
+
   const itunes = await itunesSearch(title, 1);
   const match = itunes[0];
   if (!match) throw new Error('Could not match that Spotify item to a downloadable preview.');
@@ -260,14 +287,13 @@ async function spotifyResolve(url) {
     author: match.author,
     thumbnail: match.thumbnail,
     duration: match.duration,
-    source: url,
+    source: cleanUrl,
     spotifyTitle: title,
     url: match.url,
     mimetype: 'audio/mp4',
-    filename: `${cleanName(match.title)}.m4a`
+    filename: cleanName(match.title) + '.m4a'
   };
 }
-
 /* ------------------------------ iTunes ------------------------------- */
 
 async function itunesSearch(term, limit = 10) {

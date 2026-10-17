@@ -22,10 +22,10 @@ const DOWNLOADER_COMMANDS = Object.values(DOWNLOADER_DATABASE).map((platform) =>
     try {
       const query = args.join(' ').trim();
       if (!query) {
-        return extra.reply(`Usage: .${platform.name} <search terms>\\n\\nOpening ${platform.label} search for: ${query || 'nothing'}: ` + platform.searchUrl(query || 'search'));
+        return extra.reply(`Usage: .${platform.name} <search terms>\n\nOpening ${platform.label} search for: ${query || 'nothing'}: ` + platform.searchUrl(query || 'search'));
       }
       const url = platform.searchUrl(query);
-      return extra.reply(`🔍 *${platform.label} search*\\n${query}\\n${url}\\n\\nOpen the official platform to play or download content you're authorized to access.`);
+      return extra.reply(`🔍 *${platform.label} search*\n${query}\n${url}\n\nOpen the official platform to play or download content you're authorized to access.`);
     } catch (error) {
       console.error(`[${platform.name}] failed:`, error.message);
       return extra.reply(`Could not open ${platform.label} search: ${error.message}`);

@@ -4,7 +4,7 @@
 
 const axios = require('axios');
 
-const MAX_CHARS = 200;
+const MAX_CHARS = 4000;
 const LANGS = new Set(['en', 'hi', 'id', 'es', 'fr', 'de', 'pt', 'ar', 'ja', 'ko']);
 
 function prepareSpeechText(text) {

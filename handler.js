@@ -834,6 +834,32 @@ const handleMessage = async (sock, msg) => {
       // ignore fun game handler errors
     }
 
+    // AI quiz answers (flashcards quiz session: reply 1-4 without prefix)
+    try {
+      const flashcardsCmd = require('./commands/ai/flashcards');
+      if (flashcardsCmd.handleQuizInput) {
+        const handled = await flashcardsCmd.handleQuizInput(sock, msg, {
+          from,
+          sender,
+          reply: (text) => sock.sendMessage(from, { text }, { quoted: msg }),
+        });
+        if (handled) return;
+      }
+    } catch (e) {
+      // ignore quiz handler errors
+    }
+
+    // Per-chat AI persona: answer plain messages while a persona is active
+    try {
+      const personaCmd = require('./commands/ai/persona');
+      if (personaCmd.isActive && personaCmd.isActive(from) && body && !body.startsWith(config.prefix)) {
+        const consumed = await personaCmd.handleChat(sock, msg, body, { from, sender });
+        if (consumed) return;
+      }
+    } catch (e) {
+      // ignore persona handler errors
+    }
+
     if (!msg.key.fromMe && body && !body.startsWith(config.prefix)) {
       autoChat.recordMessage(from, body);
     }
@@ -963,6 +989,7 @@ const handleMessage = async (sock, msg) => {
     // Execute command
     console.log(`Executing command: ${commandName} from ${sender}`);
     
+    const mentionedJids = content?.extendedTextMessage?.contextInfo?.mentionedJid || [];
     await command.execute(sock, msg, args, {
       from,
       sender,
@@ -973,6 +1000,7 @@ const handleMessage = async (sock, msg) => {
       isAdmin: await isAdmin(sock, sender, from, groupMetadata),
       isBotAdmin: await isBotAdmin(sock, from, groupMetadata),
       isMod: isMod(sender),
+      mentionedJid: mentionedJids,
       reply: (text) => sock.sendMessage(from, { text }, { quoted: msg }),
       react: (emoji) => sock.sendMessage(from, { react: { text: emoji, key: msg.key } })
     });

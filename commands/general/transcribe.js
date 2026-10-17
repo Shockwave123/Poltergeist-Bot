@@ -23,8 +23,8 @@ module.exports = {
   name: 'transcribe',
   aliases: ['stt', 'totext', 'voicetotext', 'voicetotxt'],
   category: 'general',
-  description: 'Transcribe an attached or replied-to audio recording',
-  usage: '.transcribe (attach/reply to audio)',
+  description: 'Transcribe an attached, replied-to, or tagged audio recording into text',
+  usage: '.transcribe (attach/reply to audio)  |  @bot .transcribe (when tagged)',
 
   async execute(sock, msg, args, extra) {
     try {
