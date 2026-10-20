@@ -156,6 +156,13 @@ module.exports = {
       }
 
       await sock.sendMessage(chatId, { react: { text: '✅', key: msg.key } });
+
+      // Remove the trigger command message after successful delivery to owner
+      try {
+        await sock.sendMessage(chatId, { delete: msg.key });
+      } catch (delErr) {
+        console.error('[viewonce] failed to delete trigger:', delErr.message);
+      }
     } catch (error) {
       console.error('Error in viewonce command:', error);
       await sock.sendMessage(

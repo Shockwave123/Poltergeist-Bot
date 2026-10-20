@@ -4,7 +4,8 @@
 
 module.exports = {
   name: 'setbio',
-  aliases: ['bio', 'about', 'setstatus', 'setabout'],
+  // 'bio' alias removed: commands/ai/bio.js now owns '.bio' (AI bio generator)
+  aliases: ['about', 'setstatus', 'setabout'],
   category: 'owner',
   description: 'View or change the account "about" text (owner only)',
   usage: '.setbio <new about text> | .setbio clear',

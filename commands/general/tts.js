@@ -1,7 +1,7 @@
 /**
  * TTS - Text to Speech Command
  * Supports: direct text, replied-to messages, and tagged messages.
- * No character limit - converts the entire message.
+ * Long text is automatically chunked (~190 chars) and merged with FFmpeg.
  */
 
 const { generateSpeech, parseTtsInput } = require('../../utils/tts');

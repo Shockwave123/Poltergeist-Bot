@@ -1,22 +1,98 @@
 /**
  * GetSS Command - Send selected status (replied message) to owner DM
+ *
+ * Only forwards messages that are genuine WhatsApp status forwards.
+ * Status detection uses WAProto metadata (statusAttributionType and
+ * statusMentions) rather than treating any forwarded reply as a status.
  */
 
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const config = require('../../config');
 const { normalizeJidWithLid } = require('../../utils/jidHelper');
 
+// WAProto ContextInfo.StatusAttributionType values
+const STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS = 4;
+
+/**
+ * Detect whether a message is a genuine WhatsApp status forward.
+ * Checks WAProto metadata: statusAttributionType (FORWARDED_FROM_STATUS = 4)
+ * and statusMentions array on the WebMessageInfo / ContextInfo.
+ */
+function isStatusForward(msg) {
+  const message = msg.message || {};
+  const current = unwrapMessage(message);
+
+  // Check contextInfo on the top-level message for status attribution
+  const ctx = current.extendedTextMessage?.contextInfo
+    || current.imageMessage?.contextInfo
+    || current.videoMessage?.contextInfo
+    || current.buttonsResponseMessage?.contextInfo
+    || current.listResponseMessage?.contextInfo
+    || message.extendedTextMessage?.contextInfo
+    || message.imageMessage?.contextInfo
+    || message.videoMessage?.contextInfo;
+
+  if (ctx) {
+    const attribution = ctx.statusAttributionType;
+    if (attribution === STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS) return true;
+    if (ctx.statusMentions && Array.isArray(ctx.statusMentions) && ctx.statusMentions.length > 0) return true;
+  }
+
+  // Check top-level WebMessageInfo fields for status mentions
+  if (msg.message) {
+    const top = msg.message;
+    if (top.extendedTextMessage?.contextInfo?.statusMentions?.length) return true;
+    if (top.imageMessage?.contextInfo?.statusMentions?.length) return true;
+    if (top.videoMessage?.contextInfo?.statusMentions?.length) return true;
+  }
+
+  // Fallback: check quoted message contextInfo for status attribution
+  const quotedCtx = current.extendedTextMessage?.contextInfo
+    || current.buttonsResponseMessage?.contextInfo
+    || current.listResponseMessage?.contextInfo;
+  if (quotedCtx?.quotedMessage) {
+    const qCtx = quotedCtx.quotedMessage?.extendedTextMessage?.contextInfo
+      || quotedCtx.quotedMessage?.imageMessage?.contextInfo
+      || quotedCtx.quotedMessage?.videoMessage?.contextInfo;
+    if (qCtx) {
+      if (qCtx.statusAttributionType === STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS) return true;
+      if (qCtx.statusMentions && Array.isArray(qCtx.statusMentions) && qCtx.statusMentions.length > 0) return true;
+    }
+  }
+
+  return false;
+}
+
+function unwrapMessage(message) {
+  let content = message || {};
+  for (let depth = 0; depth < 5; depth += 1) {
+    const inner = content.ephemeralMessage?.message ||
+      content.viewOnceMessage?.message ||
+      content.viewOnceMessageV2?.message ||
+      content.documentWithCaptionMessage?.message;
+    if (!inner) break;
+    content = inner;
+  }
+  return content;
+}
+
 module.exports = {
   name: 'getss',
   aliases: ['statusget', 'getstatus'],
   category: 'owner',
-  description: 'Send the replied status/media to owner DM',
-  usage: '.getss (reply to status message)',
+  description: 'Forward a genuine WhatsApp status message to owner DM',
+  usage: '.getss (reply to a status-forwarded message)',
   ownerOnly: true,
 
   async execute(sock, msg, args) {
     try {
       const chatId = msg.key.remoteJid;
+
+      if (!isStatusForward(msg)) {
+        return await sock.sendMessage(chatId, {
+          text: '❌ This command only works on genuine WhatsApp status forwards.\n\nReply to a message that was forwarded from a status (you will see a "forwarded" label and status metadata).'
+        }, { quoted: msg });
+      }
 
       const ctx = msg.message?.extendedTextMessage?.contextInfo
         || msg.message?.imageMessage?.contextInfo

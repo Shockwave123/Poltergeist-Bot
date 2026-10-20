@@ -5,6 +5,9 @@
 const fs = require('fs');
 const path = require('path');
 
+// Cached command registry (see loadCommands)
+let cachedCommands = null;
+
 function registerRegistryCommands(commands, modulePath, label) {
   try {
     const list = require(modulePath);
@@ -27,7 +30,12 @@ function registerDownloaderCommands(commands) {
   registerRegistryCommands(commands, './downloaderCommands', 'downloaders');
 }
 
-const loadCommands = () => {
+const loadCommands = (forceRefresh = false) => {
+  // Cache the registry: help/menu/list call this on every invocation, and
+  // re-scanning the filesystem + rebuilding the Map each time is wasted work
+  // in production (Render instances have limited CPU/RAM).
+  if (cachedCommands && !forceRefresh) return cachedCommands;
+
   const commands = new Map();
   const commandsPath = path.join(__dirname, '..', 'commands');
   
@@ -64,6 +72,7 @@ const loadCommands = () => {
   
   registerFunCommands(commands);
   registerDownloaderCommands(commands);
+  cachedCommands = commands;
   return commands;
 };
 

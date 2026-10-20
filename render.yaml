@@ -1,0 +1,29 @@
+# Render blueprint — auto-uses the memory-guarded start script from package.json
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: poltergeist-bot
+    runtime: node
+    buildCommand: npm install
+    # npm start = node --max-old-space-size=460 --expose-gc --optimize-for-size index.js
+    startCommand: npm start
+    # index.js serves GET /health with 200 from boot (setup/uptime endpoint)
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # --- Set these in the Render Dashboard (sync: false keeps secrets out of git) ---
+      - key: OWNER_NUMBER
+        sync: false
+      - key: OWNER_NAME
+        sync: false
+      - key: SESSION_ID
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENWEATHER_API_KEY
+        sync: false

@@ -20,13 +20,14 @@ module.exports = {
     try {
       const groups = groupCommands(loadCommands());
       const commandCount = groups.reduce((total, group) => total + group.commands.length, 0);
+      const divider = '━━━━━━━━━━━━━━━━';
       const folderLines = groups.flatMap((group) => {
-        const names = group.commands.map((command) => `• ${config.prefix}${command.name}`);
+        const names = group.commands.map((command) => `${config.prefix}${command.name}`);
         const rows = [];
-        for (let index = 0; index < names.length; index += 7) {
-          rows.push(`  ${names.slice(index, index + 7).join('   ')}`);
+        for (let index = 0; index < names.length; index += 4) {
+          rows.push(`  ${names.slice(index, index + 4).join(' · ')}`);
         }
-        return [`${group.icon} *${group.label}*`, ...rows, ''];
+        return [`${group.icon} *${group.label}* · ${group.commands.length}`, ...rows, ''];
       });
 
       const ownerNames = Array.isArray(config.ownerName) ? config.ownerName : [config.ownerName];
@@ -35,14 +36,14 @@ module.exports = {
 
       const menuText = [
         `╭─ *${config.botName}* ─╮`,
-        `👋 Hi @${senderName}`,
-        `Prefix: *${config.prefix}*  ·  *${commandCount} commands*`,
-        '',
-        '*COMMANDS BY FOLDER*',
+        `👋 Hey, @${senderName}!`,
+        `🧾 *${commandCount} commands*  ·  prefix *${config.prefix}*`,
+        divider,
         ...folderLines,
-        `Use *${config.prefix}help <folder>* for descriptions and aliases.`,
-        `Use *${config.prefix}help <command>* for details.`,
-        `Owner: ${displayOwner}  ·  v${packageInfo.version}`
+        divider,
+        `💡 *${config.prefix}help <folder>* — browse a category`,
+        `🔍 *${config.prefix}help <command>* — command details`,
+        `👑 Owner: ${displayOwner}  ·  v${packageInfo.version}`
       ].join('\n');
 
       const imagePath = path.join(__dirname, '../../utils/bot_image.jpg');

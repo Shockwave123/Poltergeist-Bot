@@ -996,6 +996,7 @@ const handleMessage = async (sock, msg) => {
       isGroup,
       groupMetadata,
       prefix: config.prefix,
+      commandName,
       isOwner: isOwner(sender),
       isAdmin: await isAdmin(sock, sender, from, groupMetadata),
       isBotAdmin: await isBotAdmin(sock, from, groupMetadata),

@@ -3,11 +3,17 @@ const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { fetchPublicUrl } = require('../../utils/webContent');
 const { buildPlatformSearchLink } = require('../../utils/platformSearch');
 const mediaResolver = require('../../utils/mediaResolver');
+const { toAudio } = require('../../utils/converter');
 
 const MAX_AUDIO_BYTES = 45 * 1024 * 1024;
+const MAX_FETCH_BYTES = 100 * 1024 * 1024;
 const AUDIO_TYPES = {
   '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.wav': 'audio/wav',
   '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.oga': 'audio/ogg', '.webm': 'audio/webm'
+};
+const VIDEO_TYPES = {
+  '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm',
+  '.mkv': 'video/x-matroska', '.3gp': 'video/3gpp'
 };
 
 function unwrapMessage(message) {
@@ -29,18 +35,9 @@ async function resolveStream(url, platform, query) {
 
   if (platformLower === 'soundcloud') {
     try {
-      const result = await mediaResolver.soundcloudSearch(url || query);
-      const track = result?.tracks?.[0] || result?.data?.[0];
-      if (track) {
-        const provider = track.hasOwnProperty('url') ? track.url
-          : track.hasOwnProperty('stream_url') ? track.stream_url
-          : track.hasOwnProperty('preview_url') ? track.preview_url
-          : null;
-        if (provider) {
-          const response = await fetchPublicUrl(provider, { maxBytes: MAX_AUDIO_BYTES, accept: 'audio/*,application/octet-stream' });
-          return { audio: response.buffer, mimeType: response.contentType.split(';')[0].trim() || 'audio/mpeg', filename: track.title || track.artist || 'soundcloud', source: provider };
-        }
-      }
+      const stream = await mediaResolver.soundcloudStream(url || query);
+      const response = await fetchPublicUrl(stream.url, { maxBytes: MAX_AUDIO_BYTES, accept: 'audio/*,application/octet-stream' });
+      return { audio: response.buffer, mimeType: 'audio/mpeg', filename: `${stream.title || 'soundcloud'}.mp3`, source: stream.url };
     } catch (error) {
       // fall through to link fallback
     }
@@ -49,16 +46,9 @@ async function resolveStream(url, platform, query) {
   if (platformLower === 'spotify') {
     try {
       const result = await mediaResolver.spotifyResolve(url || query);
-      const item = result?.item;
-      if (item) {
-        const tracks = Array.isArray(item) ? item : [item];
-        for (const track of tracks) {
-          if (track.preview_url) {
-            const response = await fetchPublicUrl(track.preview_url, { maxBytes: MAX_AUDIO_BYTES, accept: 'audio/*,application/octet-stream' });
-            return { audio: response.buffer, mimeType: 'audio/mpeg', filename: track.name || 'spotify', source: track.preview_url };
-          }
-        }
-      }
+      if (!result?.url) throw new Error('No downloadable preview is available for that Spotify link.');
+      const response = await fetchPublicUrl(result.url, { maxBytes: MAX_AUDIO_BYTES, accept: 'audio/*,application/octet-stream' });
+      return { audio: response.buffer, mimeType: result.mimetype || 'audio/mp4', filename: result.filename || 'spotify.m4a', source: result.url };
     } catch (error) {
       // fall through
     }
@@ -68,14 +58,12 @@ async function resolveStream(url, platform, query) {
     try {
       const search = platformLower === 'itunes' ? mediaResolver.itunesSearch : mediaResolver.deezerSearch;
       const result = await search(query || url);
-      const item = result?.result || result?.data?.[0] || result?.tracks?.[0];
-      if (item) {
-        const preview = item.preview_url || item.preview || item.track_preview || null;
-        if (preview) {
-          const response = await fetchPublicUrl(preview, { maxBytes: MAX_AUDIO_BYTES, accept: 'audio/*,application/octet-stream' });
-          return { audio: response.buffer, mimeType: 'audio/mpeg', filename: item.name || item.title || 'preview', source: preview };
-        }
-      }
+      const item = Array.isArray(result) ? result[0] : (result?.result || result?.data?.[0] || result?.tracks?.[0]);
+      if (!item) throw new Error('No matching track found.');
+      const preview = item.preview_url || item.preview || item.track_preview || item.url || null;
+      if (!preview || !/^https?:/i.test(preview)) throw new Error('No preview is available for that track.');
+      const response = await fetchPublicUrl(preview, { maxBytes: MAX_AUDIO_BYTES, accept: 'audio/*,application/octet-stream' });
+      return { audio: response.buffer, mimeType: 'audio/mpeg', filename: `${item.name || item.title || 'preview'}.mp3`, source: preview };
     } catch (error) {
       // fall through
     }
@@ -91,39 +79,61 @@ async function resolveStream(url, platform, query) {
         return { audio: response.buffer, mimeType: 'audio/mpeg', filename: result.title || 'tiktok', source: audio };
       }
       if (video) {
-        const response = await fetchPublicUrl(video, { maxBytes: 100 * 1024 * 1024, accept: 'video/*,application/octet-stream' });
-        return { audio: null, mimeType: response.contentType.split(';')[0].trim() || 'video/mp4', filename: result.title || 'tiktok', source: video };
+        const response = await fetchPublicUrl(video, { maxBytes: MAX_FETCH_BYTES, accept: 'video/*,application/octet-stream' });
+        // video-only result: keep the buffer, the execute step extracts the audio track
+        return { audio: response.buffer, mimeType: response.contentType.split(';')[0].trim() || 'video/mp4', filename: (result.title || 'tiktok') + '.mp4', source: video };
       }
     } catch (error) {
       // fall through
+    }
+  }
+
+  if (platformLower === 'youtube') {
+    try {
+      const result = await mediaResolver.youtubeAudio(url);
+      const response = await fetchPublicUrl(result.url, {
+        maxBytes: MAX_AUDIO_BYTES,
+        accept: 'audio/*,application/octet-stream'
+      });
+      return {
+        audio: response.buffer,
+        mimeType: result.mimetype || 'audio/mpeg',
+        filename: result.filename || 'youtube',
+        source: result.source || url
+      };
+    } catch (error) {
+      // fall through to link fallback
     }
   }
 
   if (platformLower === 'audiomack') {
-    try {
-      const result = await mediaResolver.audiomackSearch(url || query);
-      const track = result?.tracks?.[0] || result?.data?.[0];
-      if (track) {
-        const provider = track.url || track.stream_url || track.preview_url || null;
-        if (provider) {
-          const response = await fetchPublicUrl(provider, { maxBytes: MAX_AUDIO_BYTES, accept: 'audio/*,application/octet-stream' });
-          return { audio: response.buffer, mimeType: 'audio/mpeg', filename: track.title || track.name || 'audiomack', source: provider };
-        }
-      }
-    } catch (error) {
-      // fall through
-    }
+    // Audiomack does not expose public stream URLs; nothing playable to resolve.
   }
 
   return null;
+}
+
+// Convert a downloaded video (or unknown container with a video extension)
+// into WhatsApp-playable MP3 audio using the bundled ffmpeg.
+async function toPlayableAudio(buffer, mimetype, filename) {
+  const extension = path.extname(filename || '').toLowerCase();
+  if (mimetype.startsWith('video/') || VIDEO_TYPES[extension]) {
+    try {
+      const mp3 = await toAudio(buffer, extension.replace('.', '') || 'mp4');
+      return { audio: mp3, mimetype: 'audio/mpeg', filename: (path.basename(filename || 'audio', extension) || 'audio') + '.mp3' };
+    } catch (error) {
+      throw new Error(`could not extract the audio track from that file${error && error.message ? ` (${error.message})` : ''}`);
+    }
+  }
+  throw new Error('That link did not return a playable audio or video file.');
 }
 
 module.exports = {
   name: 'play',
   aliases: ['playaudio'],
   category: 'media',
-  description: 'Play an audio track: reply to an audio file, or play a media link via the media resolver (SoundCloud, Spotify, iTunes/Deezer preview, TikTok, Audiomack).',
-  usage: '.play (reply to audio) or .play <media url>',
+  description: 'Play audio: reply to an audio file, or give a media URL (YouTube, SoundCloud, Spotify, TikTok, Audiomack) — direct video links are converted to MP3.',
+  usage: '.play (reply to audio) or .play <media url / direct audio or video link>',
 
   async execute(sock, msg, args, extra) {
     try {
@@ -160,33 +170,38 @@ module.exports = {
         const platform = mediaResolver.detectPlatform(url);
         const resolved = await resolveStream(url, platform, args.join(' ').trim());
 
-        if (resolved.audio != null && resolved.audio.length > 0) {
+        if (resolved && resolved.audio != null && resolved.audio.length > 0) {
           audio = resolved.audio;
           mimetype = resolved.mimeType || 'audio/mpeg';
-          fileName = resolved.filename || path.basename(new URL(resolved.source).pathname) || 'audio';
-        } else if (resolved.originalUrl) {
-          const response = await fetchPublicUrl(resolved.originalUrl, {
-            maxBytes: MAX_AUDIO_BYTES,
-            accept: 'audio/*,application/octet-stream'
+          fileName = resolved.filename || path.basename(new URL(resolved.source || url).pathname) || 'audio';
+        } else {
+          // Direct file link: accept audio OR video URLs — video is converted to MP3 below.
+          const response = await fetchPublicUrl(url, {
+            maxBytes: MAX_FETCH_BYTES,
+            accept: 'audio/*,video/*,application/octet-stream'
           });
           audio = response.buffer;
-          mimetype = response.contentType.split(';')[0].trim() || 'audio/mpeg';
-          const extension = path.extname(response.url).toLowerCase();
+          const extension = path.extname(new URL(response.url).pathname).toLowerCase();
+          mimetype = response.contentType.split(';')[0].trim() || 'application/octet-stream';
           if (mimetype === 'application/octet-stream') {
-            mimetype = AUDIO_TYPES[extension] || mimetype;
-          }
-          if (!mimetype.startsWith('audio/')) {
-            throw new Error('The link must return a direct audio file, not a streaming or social page.');
+            mimetype = AUDIO_TYPES[extension] || VIDEO_TYPES[extension] || mimetype;
           }
           fileName = path.basename(new URL(response.url).pathname) || 'audio';
-        } else {
-          throw new Error(resolved.error || 'Could not resolve a playable audio source.');
         }
       } else {
         return extra.reply('Reply to an audio file with `.play`, or use `.play <media URL>`.');
       }
 
       if (!Buffer.isBuffer(audio) || !audio.length) throw new Error('The audio file is empty or could not be downloaded.');
+
+      // Direct video links (and video-only TikTok results) become MP3 audio.
+      if (!mimetype.startsWith('audio/')) {
+        const converted = await toPlayableAudio(audio, mimetype, fileName);
+        audio = converted.audio;
+        mimetype = converted.mimetype;
+        fileName = converted.filename;
+      }
+
       if (audio.length > MAX_AUDIO_BYTES) throw new Error('Audio must be 45 MB or smaller.');
 
       return sock.sendMessage(extra.from, { audio, mimetype, ptt: false, fileName }, { quoted: msg });

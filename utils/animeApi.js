@@ -6,7 +6,7 @@ const axios = require('axios');
 
 const IMAGE_API = 'https://nekos.life/api/v2/img';
 const ANIME_API = 'https://kitsu.io/api/edge/anime';
-const MAX_IMAGE_SIZE = 7 * 1024 * 1024;
+const MAX_IMAGE_SIZE = 12 * 1024 * 1024;
 
 async function getAnimeImage(category) {
   const supportedCategories = {

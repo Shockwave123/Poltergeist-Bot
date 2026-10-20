@@ -1,59 +1,49 @@
 /**
  * List Command
- * Show all commands with descriptions
+ * Show all commands grouped by folder with aliases and descriptions
  */
 
-const fs = require('fs');
-const path = require('path');
 const config = require('../../config');
 const { loadCommands } = require('../../utils/commandLoader');
+const { groupCommands } = require('../../utils/commandPresentation');
 const { sendButtons } = require('gifted-btns');
+
+const shorten = (value, maxLength = 70) => {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1).trimEnd()}…` : text;
+};
 
 module.exports = {
   name: 'list',
   aliases: [],
-  description: 'List all commands with descriptions',
+  description: 'List all commands grouped by folder',
   usage: '.list',
   category: 'general',
-  
+
   async execute(sock, msg, args, extra) {
     try {
       const prefix = config.prefix;
-      const commands = loadCommands();
-      const categories = {};
-      
-      // Group commands by category
-      commands.forEach((cmd, name) => {
-        if (cmd.name === name) { // Only count main command names, not aliases
-          const category = (cmd.category || 'other').toLowerCase();
-          if (!categories[category]) {
-            categories[category] = [];
-          }
-          categories[category].push({
-            label: cmd.description || '',
-            names: [cmd.name].concat(cmd.aliases || []),
-          });
-        }
+      const groups = groupCommands(loadCommands());
+      const commandCount = groups.reduce((total, group) => total + group.commands.length, 0);
+
+      const lines = groups.flatMap((group) => {
+        const entries = group.commands.map((command) => {
+          const names = [command.name, ...(command.aliases || [])].map((name) => `${prefix}${name}`).join(', ');
+          const label = shorten(command.description || command.desc);
+          return label ? `• \`${names}\` — ${label}` : `• \`${names}\``;
+        });
+        return [`${group.icon} *${group.label}* · ${group.commands.length}`, ...entries, ''];
       });
-      
-      let menu = `*${config.botName} - Commands List*\n`;
-      menu += `Prefix: *${prefix}*\n\n`;
-      
-      const orderedCats = Object.keys(categories).sort();
-      
-      for (const cat of orderedCats) {
-        menu += `*📂 ${cat.toUpperCase()}*\n`;
-        for (const entry of categories[cat]) {
-          const cmdList = entry.names.map((n) => `${prefix}${n}`).join(', ');
-          const label = entry.label || '';
-          menu += label ? `• \`${cmdList}\` - ${label}\n` : `• ${cmdList}\n`;
-        }
-        menu += '\n';
-      }
-      
-      menu = menu.trimEnd();
-      
-      
+
+      const menu = [
+        `╭─ *${config.botName}* ─╮`,
+        `📇 *COMMANDS LIST* · ${commandCount} total`,
+        `Prefix: *${prefix}*`,
+        '━━━━━━━━━━━━━━━━',
+        ...lines,
+        `Use *${prefix}help <folder>* to browse by category.`
+      ].join('\n').trimEnd();
+
       // Send message with buttons using gifted-btns
       await sendButtons(sock, extra.from, {
         title: '',
@@ -76,11 +66,9 @@ module.exports = {
           },
         ]
       }, { quoted: msg });
-      
     } catch (err) {
       console.error('list.js error:', err);
       await extra.reply('❌ Failed to load commands list.');
     }
   }
 };
-

@@ -50,11 +50,11 @@ module.exports = {
         const commandCount = groups.reduce((total, entry) => total + entry.commands.length, 0);
         const lines = [
           `╭─ *${config.botName} HELP* ─╮`,
-          `Prefix: *${config.prefix}*  ·  *${commandCount} commands*`,
-          '',
-          '*COMMAND FOLDERS*',
-          ...groups.map((entry) => `• ${entry.icon} *${entry.label}*  ·  ${entry.commands.length}`),
-          '',
+          `📖 *COMMAND GUIDE* · ${commandCount} commands`,
+          `Prefix: *${config.prefix}*`,
+          '━━━━━━━━━━━━━━━━',
+          ...groups.map((entry) => `• ${entry.icon} *${entry.label}* · ${entry.commands.length} commands`),
+          '━━━━━━━━━━━━━━━━',
           `Browse a folder: *${config.prefix}help <folder> [page]*`,
           `View one command: *${config.prefix}help <command>*`,
           `Example: *${config.prefix}help ai* or *${config.prefix}help .ping*`
@@ -69,6 +69,7 @@ module.exports = {
         const lines = [
           `╭─ ${group.icon} *${group.label} COMMANDS* ─╮`,
           `${group.commands.length} commands  ·  page ${shownPage}/${pageCount}`,
+          '━━━━━━━━━━━━━━━━',
           '',
           ...pageCommands.flatMap((command) => [
             `• *${config.prefix}${command.name}* — ${shorten(command.description || command.desc)}`,
