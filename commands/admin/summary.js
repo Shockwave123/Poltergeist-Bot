@@ -8,11 +8,11 @@ const { getKey } = require('../../utils/userApiKeys');
 const { fetchWebPageText } = require('../../utils/webContent');
 
 module.exports = {
-  name: 'summary',
-  aliases: ['summarize', 'chatsummary'],
+  name: 'adminsummary',
+  aliases: ['adminsummary', 'asummary'],
   category: 'admin',
-  description: 'Summarize group conversations or a public article link',
-  usage: '.summarize <URL> or .summary [number of messages]',
+  description: 'Summarize group conversations or a public article link (Admin only)',
+  usage: '.adminsummary <URL> or .asummary [number of messages]',
 
   async execute(sock, msg, args, extra) {
     try {

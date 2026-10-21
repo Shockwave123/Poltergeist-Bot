@@ -10,8 +10,9 @@ const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const config = require('../../config');
 const { normalizeJidWithLid } = require('../../utils/jidHelper');
 
-// WAProto ContextInfo.StatusAttributionType values
-const STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS = 4;
+// WAProto ContextInfo.StatusAttributionType values (string enum names)
+const STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS = "FORWARDED_FROM_STATUS";
+const STATUS_META = "STATUS";
 
 /**
  * Detect whether a message is a genuine WhatsApp status forward.
@@ -35,6 +36,7 @@ function isStatusForward(msg) {
   if (ctx) {
     const attribution = ctx.statusAttributionType;
     if (attribution === STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS) return true;
+    if (attribution === STATUS_META) return true;
     if (ctx.statusMentions && Array.isArray(ctx.statusMentions) && ctx.statusMentions.length > 0) return true;
   }
 
@@ -44,6 +46,13 @@ function isStatusForward(msg) {
     if (top.extendedTextMessage?.contextInfo?.statusMentions?.length) return true;
     if (top.imageMessage?.contextInfo?.statusMentions?.length) return true;
     if (top.videoMessage?.contextInfo?.statusMentions?.length) return true;
+    /* Also check for string enum status attribution on top-level message */
+    if (top.extendedTextMessage?.contextInfo?.statusAttributionType === STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS) return true;
+    if (top.extendedTextMessage?.contextInfo?.statusAttributionType === STATUS_META) return true;
+    if (top.imageMessage?.contextInfo?.statusAttributionType === STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS) return true;
+    if (top.imageMessage?.contextInfo?.statusAttributionType === STATUS_META) return true;
+    if (top.videoMessage?.contextInfo?.statusAttributionType === STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS) return true;
+    if (top.videoMessage?.contextInfo?.statusAttributionType === STATUS_META) return true;
   }
 
   // Fallback: check quoted message contextInfo for status attribution
@@ -56,6 +65,7 @@ function isStatusForward(msg) {
       || quotedCtx.quotedMessage?.videoMessage?.contextInfo;
     if (qCtx) {
       if (qCtx.statusAttributionType === STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS) return true;
+      if (qCtx.statusAttributionType === STATUS_META) return true;
       if (qCtx.statusMentions && Array.isArray(qCtx.statusMentions) && qCtx.statusMentions.length > 0) return true;
     }
   }

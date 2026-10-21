@@ -9,7 +9,7 @@
         "dev": "nodemon index.js",
         "test": "node tests/session-manager.test.js",
         "readme": "node scripts/update-readme.js",
-        "postinstall": "node scripts/patch-baileys.js",
+        "postinstall": "node scripts/patch-baileys.js && node scripts/update-readme.js",
         "install:no-puppeteer": "PUPPETEER_SKIP_DOWNLOAD=true PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install"
     },
     "keywords": [
