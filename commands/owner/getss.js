@@ -1,9 +1,9 @@
 /**
  * GetSS Command - Send selected status (replied message) to owner DM
  *
- * Only forwards messages that are genuine WhatsApp status forwards.
- * Status detection uses WAProto metadata (statusAttributionType and
- * statusMentions) rather than treating any forwarded reply as a status.
+ * Accepts both genuine WhatsApp status forwards (WAProto statusAttributionType /
+ * statusMentions) and regular forwarded status messages that WhatsApp flags with
+ * isForwarded / forwardingScore and carry the status content in quotedMessage.
  */
 
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
@@ -38,6 +38,16 @@ function isStatusForward(msg) {
     if (attribution === STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS) return true;
     if (attribution === STATUS_META) return true;
     if (ctx.statusMentions && Array.isArray(ctx.statusMentions) && ctx.statusMentions.length > 0) return true;
+    // Relaxed: a normal forwarded status (status shared as a regular forwarded message)
+    // WhatsApp flags these with isForwarded / forwardingScore and carries the status
+    // content in quotedMessage, which this command extracts and sends to owner DM.
+    if (
+      (ctx.isForwarded || ctx.forwardingScore) &&
+      ctx.quotedMessage &&
+      Object.keys(ctx.quotedMessage).length > 0
+    ) {
+      return true;
+    }
   }
 
   // Check top-level WebMessageInfo fields for status mentions
@@ -90,8 +100,8 @@ module.exports = {
   name: 'getss',
   aliases: ['statusget', 'getstatus'],
   category: 'owner',
-  description: 'Forward a genuine WhatsApp status message to owner DM',
-  usage: '.getss (reply to a status-forwarded message)',
+  description: 'Forward a WhatsApp status message (reply to a forwarded status) to owner DM',
+  usage: '.getss (reply to a forwarded status message)',
   ownerOnly: true,
 
   async execute(sock, msg, args) {
@@ -100,7 +110,7 @@ module.exports = {
 
       if (!isStatusForward(msg)) {
         return await sock.sendMessage(chatId, {
-          text: '❌ This command only works on genuine WhatsApp status forwards.\n\nReply to a message that was forwarded from a status (you will see a "forwarded" label and status metadata).'
+          text: '❌ This command only works on forwarded WhatsApp status messages.\n\nReply to a message that was forwarded from a status (you will see a "forwarded" label and the status content quoted in the message).'
         }, { quoted: msg });
       }
 

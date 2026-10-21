@@ -163,28 +163,26 @@ The welcome message sent after connection includes a short bot introduction and 
 | | |
 | --- | --- |
 | 🤖 **Bot version** | `1.0.4` |
-| ⚡ **Commands** | **247** across **9** categories (prefix `.`) |
+| ⚡ **Commands** | **244** across **9** categories (prefix `.`) |
 | 📦 **Direct dependencies** | **26** |
 | 🟢 **Node.js required** | `>=20.19` |
 
 <details>
-<summary><b>🗂️ Full command index (247)</b></summary>
+<summary><b>🗂️ Full command index (244)</b></summary>
 
-#### 🧭 GENERAL · 37
+#### 🧭 GENERAL · 36
 `.account` · `.archive` · `.attp` · `.crop` · `.define` · `.dm`
 `.expense` · `.getpp` · `.github` · `.groupinfo` · `.groupstats` · `.help`
 `.journal` · `.learn` · `.list` · `.markread` · `.menu` · `.mutechat`
 `.myactivity` · `.owner` · `.pin` · `.ping` · `.qr` · `.remind`
 `.setupguide` · `.simage` · `.ssweb` · `.star` · `.sticker` · `.take`
-`.transcribe` · `.translate` · `.tts` · `.ttx` · `.uptime` · `.viewonce`
-`.wikipedia`
+`.transcribe` · `.translate` · `.tts` · `.uptime` · `.viewonce` · `.wikipedia`
 
-#### 🤖 AI · 25
-`.ai` · `.aikey` · `.audio` · `.bio` · `.debate` · `.deepread`
-`.dream` · `.email` · `.explain` · `.factcheck` · `.fix` · `.flashcards`
-`.gptimage` · `.grammar` · `.imagine` · `.persona` · `.poem` · `.recipe`
-`.rephrase` · `.sentiment` · `.studyplan` · `.summarize` · `.tweet` · `.vision`
-`.workout`
+#### 🤖 AI · 23
+`.ai` · `.aikey` · `.bio` · `.debate` · `.deepread` · `.dream`
+`.email` · `.explain` · `.factcheck` · `.fix` · `.flashcards` · `.gptimage`
+`.grammar` · `.imagine` · `.persona` · `.poem` · `.recipe` · `.rephrase`
+`.sentiment` · `.studyplan` · `.tweet` · `.vision` · `.workout`
 
 #### 👾 ANIME · 2
 `.anime` · `.random`
@@ -219,11 +217,11 @@ The welcome message sent after connection includes a short bot introduction and 
 `.sand` · `.snow` · `.thunder`
 
 #### 🛡️ ADMIN · 32
-`.antibadword` · `.antigroupmention` · `.antigroupstatus` · `.antilink` · `.antisticker` · `.antitag`
-`.autosticker` · `.chatbot` · `.clean` · `.delete` · `.demote` · `.goodbye`
-`.grouplink` · `.groupstatus` · `.hidetag` · `.kick` · `.leave` · `.lock`
-`.mute` · `.pending` · `.promote` · `.resetwarn` · `.revoke` · `.setgoodbye`
-`.setwelcome` · `.summary` · `.tagadmins` · `.tagall` · `.unmute` · `.warn`
+`.adminsummary` · `.antibadword` · `.antigroupmention` · `.antigroupstatus` · `.antilink` · `.antisticker`
+`.antitag` · `.autosticker` · `.chatbot` · `.clean` · `.delete` · `.demote`
+`.goodbye` · `.grouplink` · `.groupstatus` · `.hidetag` · `.kick` · `.leave`
+`.lock` · `.mute` · `.pending` · `.promote` · `.resetwarn` · `.revoke`
+`.setgoodbye` · `.setwelcome` · `.tagadmins` · `.tagall` · `.unmute` · `.warn`
 `.warnlist` · `.welcome`
 
 #### 👑 OWNER · 34

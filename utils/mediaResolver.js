@@ -191,65 +191,79 @@ async function youtubeSearch(query, limit = 8) {
 }
 
 async function youtubeAudio(url) {
-  const id = youtubeId(url) || url;
-  const search = await youtubeSearch(id, 1);
-  const top = search[0];
-  const resolvedId = id.length === 11 && /^[A-Za-z0-9_-]+$/.test(id) ? id : youtubeId(top?.url || '') || id;
-  const { formats, details } = await getPlayerFormats(resolvedId);
-  const pick = pickAudioFormat(formats);
+  const id = youtubeId(url);
+  // Use the actual video ID from the provided link. Never run a search that
+  // could return a different / similar song.
+  if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id)) {
+    throw new Error('Could not extract a YouTube video ID from that link.');
+  }
+  const targetUrl = `https://youtu.be/${id}`;
 
-  if (pick) {
-    const title = details?.title || top?.title || 'audio';
-    const author = details?.author || top?.author;
-    const thumbnail = details?.videoDetails?.thumbnail?.thumbnails?.slice(-1)[0]?.url || top?.thumbnail;
-    const duration = Number(details?.lengthSeconds || top?.duration || 0);
-    const ext = /webm|opus/i.test(pick.mimeType) ? 'webm' : 'm4a';
-    return {
-      title,
-      author,
-      thumbnail,
-      duration,
-      source: top?.url || `https://youtu.be/${resolvedId}`,
-      url: pick.url,
-      mimetype: pick.mimeType || 'audio/webm',
-      contentLength: pick.contentLength,
-      filename: `${cleanName(title)}.${ext}`
-    };
+  // Primary: yt-dlp-exec solves signature ciphers and returns the FULL stream.
+  try {
+    return await youtubeDlAudio(targetUrl);
+  } catch (dlError) {
+    console.error('[youtubeAudio] yt-dlp failed, falling back to player parser:', dlError.message);
   }
 
-  // Fallback: yt-dlp-exec handles signatureCipher formats
-  return youtubeDlAudio(url);
+  // Fallback: inline player-response parser (no cipher solving).
+  const { formats, details } = await getPlayerFormats(id);
+  const pick = pickAudioFormat(formats);
+  if (!pick) throw new Error('Could not resolve a playable YouTube audio stream.');
+  const title = details?.title || 'audio';
+  const author = details?.author || '';
+  const thumbnail = details?.videoDetails?.thumbnail?.thumbnails?.slice(-1)[0]?.url || '';
+  const duration = Number(details?.lengthSeconds || 0);
+  const ext = /webm|opus/i.test(pick.mimeType) ? 'webm' : 'm4a';
+  return {
+    title,
+    author,
+    thumbnail,
+    duration,
+    source: targetUrl,
+    url: pick.url,
+    mimetype: pick.mimeType || 'audio/webm',
+    contentLength: pick.contentLength,
+    filename: `${cleanName(title)}.${ext}`
+  };
 }
 
 async function youtubeVideo(url, quality = '720p') {
-  const id = youtubeId(url) || url;
-  const search = await youtubeSearch(id, 1);
-  const top = search[0];
-  const resolvedId = id.length === 11 && /^[A-Za-z0-9_-]+$/.test(id) ? id : youtubeId(top?.url || '') || id;
-  const { formats, details } = await getPlayerFormats(resolvedId);
-  const pick = pickVideoFormat(formats, quality);
+  const id = youtubeId(url);
+  // Use the actual video ID from the provided link. Never run a search that
+  // could return a different / similar song.
+  if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id)) {
+    throw new Error('Could not extract a YouTube video ID from that link.');
+  }
+  const targetUrl = `https://youtu.be/${id}`;
 
-  if (pick) {
-    const title = details?.title || top?.title || 'video';
-    const author = details?.author || top?.author;
-    const thumbnail = details?.videoDetails?.thumbnail?.thumbnails?.slice(-1)[0]?.url || top?.thumbnail;
-    const duration = Number(details?.lengthSeconds || top?.duration || 0);
-    return {
-      title,
-      author,
-      thumbnail,
-      duration,
-      quality: `${pick.height}p`,
-      source: top?.url || `https://youtu.be/${resolvedId}`,
-      url: pick.url,
-      mimetype: pick.mimeType || 'video/mp4',
-      contentLength: pick.contentLength,
-      filename: `${cleanName(title)}.mp4`
-    };
+  // Primary: yt-dlp-exec solves signature ciphers and returns the FULL stream.
+  try {
+    return await youtubeDlVideo(targetUrl, quality);
+  } catch (dlError) {
+    console.error('[youtubeVideo] yt-dlp failed, falling back to player parser:', dlError.message);
   }
 
-  // Fallback: yt-dlp-exec handles DASH/signatureCipher formats
-  return youtubeDlVideo(url, quality);
+  // Fallback: inline player-response parser.
+  const { formats, details } = await getPlayerFormats(id);
+  const pick = pickVideoFormat(formats, quality);
+  if (!pick) throw new Error('Could not resolve a playable YouTube video stream.');
+  const title = details?.title || 'video';
+  const author = details?.author || '';
+  const thumbnail = details?.videoDetails?.thumbnail?.thumbnails?.slice(-1)[0]?.url || '';
+  const duration = Number(details?.lengthSeconds || 0);
+  return {
+    title,
+    author,
+    thumbnail,
+    duration,
+    quality: `${pick.height}p`,
+    source: targetUrl,
+    url: pick.url,
+    mimetype: pick.mimeType || 'video/mp4',
+    contentLength: pick.contentLength,
+    filename: `${cleanName(title)}.mp4`
+  };
 }
 
 
