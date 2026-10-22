@@ -1,127 +1,41 @@
 /**
- * GetSS Command - Send selected status (replied message) to owner DM
+ * GetSS Command - Send any replied-to message/status to owner DM
  *
- * Accepts both genuine WhatsApp status forwards (WAProto statusAttributionType /
- * statusMentions) and regular forwarded status messages that WhatsApp flags with
- * isForwarded / forwardingScore and carry the status content in quotedMessage.
+ * Reply to any message (status, text, image, video, document, audio, sticker)
+ * with .getss and it will be forwarded directly to the bot owner's DM.
  */
 
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const config = require('../../config');
 const { normalizeJidWithLid } = require('../../utils/jidHelper');
 
-// WAProto ContextInfo.StatusAttributionType values (string enum names)
-const STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS = "FORWARDED_FROM_STATUS";
-const STATUS_META = "STATUS";
-
-/**
- * Detect whether a message is a genuine WhatsApp status forward.
- * Checks WAProto metadata: statusAttributionType (FORWARDED_FROM_STATUS = 4)
- * and statusMentions array on the WebMessageInfo / ContextInfo.
- */
-function isStatusForward(msg) {
-  const message = msg.message || {};
-  const current = unwrapMessage(message);
-
-  // Check contextInfo on the top-level message for status attribution
-  const ctx = current.extendedTextMessage?.contextInfo
-    || current.imageMessage?.contextInfo
-    || current.videoMessage?.contextInfo
-    || current.buttonsResponseMessage?.contextInfo
-    || current.listResponseMessage?.contextInfo
-    || message.extendedTextMessage?.contextInfo
-    || message.imageMessage?.contextInfo
-    || message.videoMessage?.contextInfo;
-
-  if (ctx) {
-    const attribution = ctx.statusAttributionType;
-    if (attribution === STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS) return true;
-    if (attribution === STATUS_META) return true;
-    if (ctx.statusMentions && Array.isArray(ctx.statusMentions) && ctx.statusMentions.length > 0) return true;
-    // Relaxed: a normal forwarded status (status shared as a regular forwarded message)
-    // WhatsApp flags these with isForwarded / forwardingScore and carries the status
-    // content in quotedMessage, which this command extracts and sends to owner DM.
-    if (
-      (ctx.isForwarded || ctx.forwardingScore) &&
-      ctx.quotedMessage &&
-      Object.keys(ctx.quotedMessage).length > 0
-    ) {
-      return true;
-    }
-  }
-
-  // Check top-level WebMessageInfo fields for status mentions
-  if (msg.message) {
-    const top = msg.message;
-    if (top.extendedTextMessage?.contextInfo?.statusMentions?.length) return true;
-    if (top.imageMessage?.contextInfo?.statusMentions?.length) return true;
-    if (top.videoMessage?.contextInfo?.statusMentions?.length) return true;
-    /* Also check for string enum status attribution on top-level message */
-    if (top.extendedTextMessage?.contextInfo?.statusAttributionType === STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS) return true;
-    if (top.extendedTextMessage?.contextInfo?.statusAttributionType === STATUS_META) return true;
-    if (top.imageMessage?.contextInfo?.statusAttributionType === STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS) return true;
-    if (top.imageMessage?.contextInfo?.statusAttributionType === STATUS_META) return true;
-    if (top.videoMessage?.contextInfo?.statusAttributionType === STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS) return true;
-    if (top.videoMessage?.contextInfo?.statusAttributionType === STATUS_META) return true;
-  }
-
-  // Fallback: check quoted message contextInfo for status attribution
-  const quotedCtx = current.extendedTextMessage?.contextInfo
-    || current.buttonsResponseMessage?.contextInfo
-    || current.listResponseMessage?.contextInfo;
-  if (quotedCtx?.quotedMessage) {
-    const qCtx = quotedCtx.quotedMessage?.extendedTextMessage?.contextInfo
-      || quotedCtx.quotedMessage?.imageMessage?.contextInfo
-      || quotedCtx.quotedMessage?.videoMessage?.contextInfo;
-    if (qCtx) {
-      if (qCtx.statusAttributionType === STATUS_ATTRIBUTION_FORWARDED_FROM_STATUS) return true;
-      if (qCtx.statusAttributionType === STATUS_META) return true;
-      if (qCtx.statusMentions && Array.isArray(qCtx.statusMentions) && qCtx.statusMentions.length > 0) return true;
-    }
-  }
-
-  return false;
-}
-
-function unwrapMessage(message) {
-  let content = message || {};
-  for (let depth = 0; depth < 5; depth += 1) {
-    const inner = content.ephemeralMessage?.message ||
-      content.viewOnceMessage?.message ||
-      content.viewOnceMessageV2?.message ||
-      content.documentWithCaptionMessage?.message;
-    if (!inner) break;
-    content = inner;
-  }
-  return content;
-}
-
 module.exports = {
   name: 'getss',
   aliases: ['statusget', 'getstatus'],
   category: 'owner',
-  description: 'Forward a WhatsApp status message (reply to a forwarded status) to owner DM',
-  usage: '.getss (reply to a forwarded status message)',
+  description: 'Send any replied-to message/status to your owner DM',
+  usage: '.getss (reply to any message/status)',
   ownerOnly: true,
 
   async execute(sock, msg, args) {
     try {
       const chatId = msg.key.remoteJid;
 
-      if (!isStatusForward(msg)) {
-        return await sock.sendMessage(chatId, {
-          text: '❌ This command only works on forwarded WhatsApp status messages.\n\nReply to a message that was forwarded from a status (you will see a "forwarded" label and the status content quoted in the message).'
-        }, { quoted: msg });
-      }
-
-      const ctx = msg.message?.extendedTextMessage?.contextInfo
-        || msg.message?.imageMessage?.contextInfo
-        || msg.message?.videoMessage?.contextInfo
-        || msg.message?.buttonsResponseMessage?.contextInfo
-        || msg.message?.listResponseMessage?.contextInfo;
+      // Gather contextInfo from any message type that carries a quoted (replied) message
+      const message = msg.message || {};
+      const ctx = message.extendedTextMessage?.contextInfo
+        || message.imageMessage?.contextInfo
+        || message.videoMessage?.contextInfo
+        || message.buttonsResponseMessage?.contextInfo
+        || message.listResponseMessage?.contextInfo
+        || message.documentMessage?.contextInfo
+        || message.audioMessage?.contextInfo
+        || message.stickerMessage?.contextInfo;
 
       if (!ctx || !ctx.quotedMessage) {
-        return await sock.sendMessage(chatId, { text: '❗ Reply to the status/forwarded message you want to send to owner DM.' }, { quoted: msg });
+        return await sock.sendMessage(chatId, {
+          text: '❌ Please reply to a message/status with .getss to send it to your DM.'
+        }, { quoted: msg });
       }
 
       const quotedMsg = ctx.quotedMessage;
@@ -159,15 +73,21 @@ module.exports = {
         return await sock.sendMessage(chatId, { text: '❌ Could not extract media/text from the replied message.' }, { quoted: msg });
       }
 
-      // Handle text status
+      const ownerNumber = Array.isArray(config.ownerNumber) ? config.ownerNumber[0] : config.ownerNumber;
+      const ownerJid = ownerNumber ? normalizeJidWithLid(
+        ownerNumber.includes('@') ? ownerNumber : `${ownerNumber}@s.whatsapp.net`
+      ) : null;
+
+      if (!ownerJid) {
+        return await sock.sendMessage(chatId, { text: '❌ No owner configured.' }, { quoted: msg });
+      }
+
+      // ---- Text status / message ----
       if (mtype === 'conversation' || mtype === 'extendedTextMessage' || mtype === 'text') {
         const text = actualMsg.conversation || actualMsg.extendedTextMessage?.text || '';
-        const ownerNumber = Array.isArray(config.ownerNumber) ? config.ownerNumber[0] : config.ownerNumber;
-        const ownerJid = ownerNumber ? normalizeJidWithLid(ownerNumber.includes('@') ? ownerNumber : `${ownerNumber}@s.whatsapp.net`) : null;
-
-        if (!ownerJid) return await sock.sendMessage(chatId, { text: '❌ No owner configured.' }, { quoted: msg });
-
-        await sock.sendMessage(ownerJid, { text: `📩 Status forwarded from ${chatId}\n\n${text}` });
+        await sock.sendMessage(ownerJid, {
+          text: `📩 Status/Message forwarded from ${chatId}\n\n${text}`
+        });
         return await sock.sendMessage(chatId, { react: { text: '✅', key: msg.key } });
       }
 
@@ -188,10 +108,6 @@ module.exports = {
       }
 
       const caption = mediaObject?.caption || '';
-      const ownerNumber = Array.isArray(config.ownerNumber) ? config.ownerNumber[0] : config.ownerNumber;
-      const ownerJid = ownerNumber ? normalizeJidWithLid(ownerNumber.includes('@') ? ownerNumber : `${ownerNumber}@s.whatsapp.net`) : null;
-
-      if (!ownerJid) return await sock.sendMessage(chatId, { text: '❌ No owner configured.' }, { quoted: msg });
 
       // Send to owner
       if (/video/.test(mtype)) {

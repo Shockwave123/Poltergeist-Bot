@@ -23,14 +23,12 @@ const formatUsage = (command) => {
   const usage = String(command.usage || command.name).trim();
   return /^[^\p{L}\p{N}\s]/u.test(usage) ? usage : `${config.prefix}${usage}`;
 };
-const PAGE_SIZE = 10;
-
 module.exports = {
   name: 'help',
   aliases: [],
   category: 'general',
   description: 'Browse commands by folder or view a command guide',
-  usage: '.help [folder [page]|command]',
+  usage: '.help [folder|command]',
 
   async execute(sock, msg, args, extra) {
     try {
@@ -42,7 +40,6 @@ module.exports = {
       const searchParts = forcedMode ? queryParts.slice(1) : queryParts;
       const candidateFolder = searchParts[0]?.toLowerCase();
       const group = forcedMode === 'command' ? null : groups.find((entry) => entry.folder === candidateFolder);
-      const page = group ? Math.max(1, Number.parseInt(searchParts[1], 10) || 1) : 1;
       const query = (forcedMode === 'command' ? searchParts : (group ? [] : searchParts))
         .join(' ').replace(/^\./, '').toLowerCase();
 
@@ -55,7 +52,7 @@ module.exports = {
           '━━━━━━━━━━━━━━━━',
           ...groups.map((entry) => `• ${entry.icon} *${entry.label}* · ${entry.commands.length} commands`),
           '━━━━━━━━━━━━━━━━',
-          `Browse a folder: *${config.prefix}help <folder> [page]*`,
+          `Browse a folder: *${config.prefix}help <folder>*`,
           `View one command: *${config.prefix}help <command>*`,
           `Example: *${config.prefix}help ai* or *${config.prefix}help .ping*`
         ];
@@ -63,12 +60,12 @@ module.exports = {
       }
 
       if (group && forcedMode !== 'command') {
-        const pageCount = Math.max(1, Math.ceil(group.commands.length / PAGE_SIZE));
-        const shownPage = Math.min(page, pageCount);
-        const pageCommands = group.commands.slice((shownPage - 1) * PAGE_SIZE, shownPage * PAGE_SIZE);
+        const pageCount = 1;
+        const shownPage = 1;
+        const pageCommands = group.commands;
         const lines = [
           `╭─ ${group.icon} *${group.label} COMMANDS* ─╮`,
-          `${group.commands.length} commands  ·  page ${shownPage}/${pageCount}`,
+          `${group.commands.length} commands`,
           '━━━━━━━━━━━━━━━━',
           '',
           ...pageCommands.flatMap((command) => [
@@ -76,7 +73,7 @@ module.exports = {
             `  Example: *${formatUsage(command)}*`
           ]),
           '',
-          pageCount > 1 ? `Next: *${config.prefix}help ${group.folder} ${Math.min(shownPage + 1, pageCount)}*` : '',
+
           `For aliases and access details: *${config.prefix}help <command>*`
         ];
         return extra.reply(lines.filter(Boolean).join('\n'));

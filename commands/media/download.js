@@ -65,10 +65,16 @@ async function resolveStream(url, platform, query) {
       const result = await search(query || url);
       const item = Array.isArray(result) ? result[0] : (result?.result || result?.data?.[0] || result?.tracks?.[0]);
       if (!item) throw new Error('No matching track found.');
-      const preview = item.preview_url || item.preview || item.track_preview || item.url || null;
-      if (!preview || !/^https?:/i.test(preview)) throw new Error('No preview is available for that track.');
-      const response = await fetchPublicUrl(preview, { maxBytes: MAX_AUDIO_BYTES, accept: 'audio/*,application/octet-stream' });
-      return { audio: response.buffer, mimeType: 'audio/mpeg', filename: `${item.name || item.title || 'preview'}.mp3`, source: preview };
+      // Build a search query from the track metadata to find the full song on YouTube
+      const artist = item.artist_name || item.artist?.name || item.artist || '';
+      const title = item.track_name || item.title || item.name || '';
+      const searchQuery = (artist && title ? `${artist} - ${title}` : (title || query || url)).trim();
+      const ytResult = await mediaResolver.youtubeDlAudio(`https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`);
+      if (ytResult?.url) {
+        const response = await fetchPublicUrl(ytResult.url, { maxBytes: MAX_AUDIO_BYTES, accept: 'audio/*,application/octet-stream' });
+        return { audio: response.buffer, mimeType: ytResult.mimetype || 'audio/mpeg', filename: `${mediaResolver.cleanName(title || 'track')}.mp3`, source: ytResult.url };
+      }
+      throw new Error('Could not resolve full audio for that track.');
     } catch (error) {
       failures.push(`${platformLower}: ${error.message}`);
     }

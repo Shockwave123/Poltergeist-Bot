@@ -19,7 +19,12 @@ async function fetchSafe(url, timeoutMs) {
   try {
     const res = await axios.get(url, {
       timeout: timeoutMs,
-      headers: { 'User-Agent': 'PoltergeistMD-Bot/1.0' },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://dictionaryapi.dev/'
+      },
     });
     return res.data;
   } catch (err) {
@@ -87,6 +92,52 @@ function formatEntry(entry, word) {
   return lines.filter((l) => l !== undefined).join('\n');
 }
 
+
+/**
+ * Fallback: Wiktionary API (free, no key needed).
+ */
+async function tryWiktionary(word) {
+  try {
+    const url = `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(word)}`;
+    const data = await fetchSafe(url, 10000);
+    if (!data || !data[0]?.definitions?.length) return null;
+    const entry = {
+      word,
+      phonetic: '',
+      meanings: [{
+        partOfSpeech: 'definition',
+        definitions: data[0].definitions.slice(0, 4).map((d) => ({
+          definition: d.definition || '',
+          example: ''
+        }))
+      }]
+    };
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fallback: Wikipedia summary API.
+ */
+async function tryWikipedia(word) {
+  try {
+    const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(word)}`;
+    const data = await fetchSafe(url, 10000);
+    if (!data || !data.extract) return null;
+    return {
+      word,
+      phonetic: '',
+      meanings: [{
+        partOfSpeech: 'meaning',
+        definitions: [{ definition: data.extract }]
+      }]
+    };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Final fallback: free-dictionary.com scrape.
@@ -160,10 +211,18 @@ module.exports = {
       }
       if (!entry && !notFound) {
         try {
+          entry = await tryWiktionary(word);
+        } catch { /* silent */ }
+      }
+      if (!entry && !notFound) {
+        try {
+          entry = await tryWikipedia(word);
+        } catch { /* silent */ }
+      }
+      if (!entry && !notFound) {
+        try {
           entry = await tryFreeDictionaryDotCom(word);
-        } catch {
-          // silent
-        }
+        } catch { /* silent */ }
       }
 
       // ── Word not in any dictionary ────────────────────────────────────────

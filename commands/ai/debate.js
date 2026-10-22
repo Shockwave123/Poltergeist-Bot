@@ -12,7 +12,7 @@
 const { generateContent } = require('../../utils/googleAi');
 const { getKey } = require('../../utils/userApiKeys');
 
-const MAX_TOKENS = 600;
+const MAX_TOKENS = 900;
 
 module.exports = {
   name: 'debate',
@@ -49,11 +49,15 @@ module.exports = {
 
       await extra.react('⚔️');
 
-      // Round 1: side A opens. Round 2: side B rebuts (2 calls total - free tier friendly)
+      // Full debate: 6 rounds (3 per side) for a complete back-and-forth
       let conversation = '';
       const turns = [
-        { speaker: sideA, stance: 'arguing FOR' },
-        { speaker: sideB, stance: 'arguing AGAINST (rebuttal)' },
+        { speaker: sideA, stance: 'arguing FOR (opening statement)' },
+        { speaker: sideB, stance: 'arguing AGAINST (opening statement)' },
+        { speaker: sideA, stance: 'arguing FOR (rebuttal to opponent\'s opening)' },
+        { speaker: sideB, stance: 'arguing AGAINST (rebuttal to opponent\'s point)' },
+        { speaker: sideA, stance: 'arguing FOR (final counter-rebuttal)' },
+        { speaker: sideB, stance: 'arguing AGAINST (final counter-rebuttal and closing statement)' },
       ];
 
       for (const turn of turns) {
@@ -62,7 +66,7 @@ module.exports = {
           `Topic: ${topic}`,
           `You are ${turn.speaker}, ${turn.stance}.`,
           conversation ? `Debate so far:\n${conversation}` : 'You have the opening statement.',
-          `Reply now as ${turn.speaker}. Max 200 words. Start your message with [${turn.speaker}]. Be persuasive but respectful - no insults.`,
+          `Reply now as ${turn.speaker}. Max 150 words. Start your message with [${turn.speaker}]. Be persuasive but respectful - no insults.`,
         ].join('\n\n');
 
         const response = await generateContent([{ text: prompt }], {

@@ -17,11 +17,11 @@ module.exports = {
         return extra.reply('❌ Please provide a website URL!\n\nExample: .ssweb https://github.com');
       }
       
-      const url = args.join(' ');
+      let url = args.join(' ');
       
-      // Validate URL
+      // Auto-prepend https:// if protocol is missing
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        return extra.reply('❌ Please provide a valid URL starting with http:// or https://');
+        url = 'https://' + url;
       }
       
       await sock.sendMessage(extra.from, {

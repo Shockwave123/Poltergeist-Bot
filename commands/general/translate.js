@@ -40,8 +40,8 @@ module.exports = {
   name: 'translate',
   aliases: ['tr', 'trans', 'trt'],
   category: 'general',
-  description: 'Translate text (supports replies and voice output)',
-  usage: '.translate <lang> <text> [--audio]\nReply: .translate <lang> [--audio]',
+  description: 'Translate text between supported languages (supports replies and voice output)',
+  usage: '.translate <lang_code> <text>  |  .translate <lang_code> (reply to a message)  |  Add --audio for voice',
   async execute(sock, msg, args, extra) {
     try {
       const chatId = extra.from;
@@ -57,23 +57,32 @@ module.exports = {
         textToTranslate = input.slice(1).join(' ');
       } else {
         const codes = Object.entries(LANGUAGE_CODES)
-          .map(([k, v]) => k + ' - ' + v)
-          .join(', ');
-        return extra.reply('🌐 *Translator*\n\n' +
-          'Usage: .translate <lang> <text>\n' +
-          'Reply: .translate <lang> (reply to msg)\n' +
-          'Add --audio for voice\n\n' +
-          'Example: .translate es Hello world\n\n' +
-          'Codes: ' + codes);
+          .map(([k, v]) => `• *${k}* — ${v}`)
+          .join('\n');
+        return extra.reply(
+          '🌐 *Translator — Supported Languages*\n\n' +
+          codes + '\n\n' +
+          '*Usage:*\n' +
+          `• .translate <lang_code> <text>\n` +
+          `• .translate <lang_code> (reply to a message)\n` +
+          '• Add `--audio` for voice output\n\n' +
+          '*Example:* `.translate es Hello world`\n' +
+          '*Example:* `.translate fr Bonjour --audio`'
+        );
       }
       if (!LANGUAGE_CODES[targetLang]) {
-        return extra.reply('❌ Unknown code: ' + targetLang +
-          '\n\nSupported: ' + Object.keys(LANGUAGE_CODES).join(', '));
+        await extra.react('❌');
+        return extra.reply(
+          '❌ Unknown language code: *' + targetLang + '*\n\n' +
+          'Use `.translate` to see all supported language codes.'
+        );
       }
       if (!textToTranslate) {
+        await extra.react('❌');
         return extra.reply('❌ No text found. Provide text or reply to a message.');
       }
-      await extra.reply('🔄 Translating... ');
+
+      await extra.react('⏳');
       let translated = '';
       try {
         const result = await APIs.translate(textToTranslate, targetLang);
@@ -125,6 +134,8 @@ module.exports = {
       }
       translated = String(translated || '').trim();
       if (!translated) throw new Error('Empty translation');
+
+      await extra.react('✅');
       const replyText =
         '🌐 *Translation*\n\n' +
         '📝 Original: ' + textToTranslate + '\n' +
@@ -137,10 +148,11 @@ module.exports = {
       }
     } catch (error) {
       console.error('[translate] error:', error);
+      try { await extra.react('❌'); } catch { /* ignore */ }
       await extra.reply(
         '❌ Translation failed!\n\n' +
         error.message + '\n\n' +
-        'Codes: ' + Object.keys(LANGUAGE_CODES).join(', ')
+        'Use `.translate` to see all supported language codes.'
       );
     }
   }
