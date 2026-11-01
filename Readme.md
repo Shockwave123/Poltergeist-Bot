@@ -209,6 +209,45 @@ The welcome message sent after connection includes a short bot introduction and 
 `.convert` · `.countdown` · `.currency` · `.datecalc` · `.emoji` · `.encode`
 `.ip` · `.password` · `.randomnum` · `.shorturl` · `.time` · `.tip`
 `.todo` · `.vocab` · `.weather`
+#### 🆕 NEW COMMANDS · 13
+`.base64` · `.crun` · `.gpt` · `.llama` · `.mistral`
+`.alamy` · `.apkdl` · `.addreply` · `.antidelete`
+`.cmdreact` · `.autoreact` · `.audiofx` · `.attp`
+`.coding`
+
+#### 🎯 EMOJI STATUS SYSTEM
+All commands now include visual emoji feedback:
+
+**Working Emoji** (shown when command starts processing):
+- `🔡` - Base64 encoding/decoding
+- `🤖` - AI commands thinking (gpt/llama/mistral)
+- `🦙` - Llama AI specifically
+- `🪄` - Mistral AI
+- `➕` - Add/create operations (addreply, new features)
+- `🎧` - Audio effects processing
+- `💻` - Programming/image commands
+
+**Done Emoji** (included in response text):
+- `🔗` - Encoded/transformed results (base64)
+- `✅` - Successful completion
+- `❌` - Error messages
+
+**Example Flow**:
+```
+User: .base64 Hello World
+Bot: [🔡 reaction] → [Processing...] → *🔗 Base64 Encoded:* SGVsbG8gV29ybGQ=
+
+User: .gpt quantum physics
+Bot: [🤖 reaction] → [AI processing...] → *✅ AI Response:* [answer]
+
+User: .antidelete on
+Bot: [➕ reaction] → [✅ Antidelete enabled!]
+```
+#### 🖋️ TEXTMAKER · 21
+`.1917` · `.arena` · `.blackpink` · `.codm` · `.devil` · `.efootball`
+`.fire` · `.glitch` · `.hacker` · `.ice` · `.impressive` · `.leaves`
+`.light` · `.matrix` · `.metallic` · `.neon` · `.pubg` · `.purple`
+`.sand` · `.snow` · `.thunder`
 
 #### 🖋️ TEXTMAKER · 21
 `.1917` · `.arena` · `.blackpink` · `.codm` · `.devil` · `.efootball`
