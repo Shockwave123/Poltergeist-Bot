@@ -2,11 +2,12 @@
  * Translate Command
  */
 
-const APIs = require('../../utils/api');
 const { sendVoiceNote } = require('../../utils/voiceNote');
 const { generateContent } = require('../../utils/googleAi');
 const { getKey } = require('../../utils/userApiKeys');
 const fetch = require('node-fetch');
+
+const TRANSLATION_TIMEOUT_MS = 10000;
 
 function unwrapMessage(message) {
   let content = message || {};
@@ -27,7 +28,12 @@ function getTextFromMessage(msg) {
     || current.buttonsResponseMessage?.contextInfo
     || current.listResponseMessage?.contextInfo;
   const quoted = unwrapMessage(contextInfo?.quotedMessage);
-  return quoted?.conversation || quoted?.extendedTextMessage?.text || '';
+  return quoted?.conversation
+    || quoted?.extendedTextMessage?.text
+    || quoted?.imageMessage?.caption
+    || quoted?.videoMessage?.caption
+    || quoted?.documentMessage?.caption
+    || '';
 }
 
 const LANGUAGE_CODES = {
@@ -84,53 +90,64 @@ module.exports = {
 
       await extra.react('⏳');
       let translated = '';
+      const failures = [];
       try {
-        const result = await APIs.translate(textToTranslate, targetLang);
-        translated = result?.translation || result?.text || result || '';
-      } catch (e) {}
-      if (!translated || !translated.trim()) {
-        try {
-          const response = await fetch(
-            'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=' +
-            targetLang + '&dt=t&q=' + encodeURIComponent(textToTranslate),
-            { timeout: 20000 }
-          );
-          if (response.ok) {
-            const data = await response.json();
-            if (data && data[0] && data[0][0] && data[0][0][0]) {
-              translated = data[0][0][0];
-            }
-          }
-        } catch (e) {}
+        const googleUrl = new URL('https://translate.googleapis.com/translate_a/single');
+        googleUrl.search = new URLSearchParams({
+          client: 'gtx',
+          sl: 'auto',
+          tl: targetLang,
+          dt: 't',
+          q: textToTranslate
+        }).toString();
+        const response = await fetch(googleUrl.toString(), { timeout: TRANSLATION_TIMEOUT_MS });
+        if (!response.ok) throw new Error(`Google Translate returned HTTP ${response.status}`);
+        const data = await response.json();
+        translated = Array.isArray(data?.[0])
+          ? data[0].map((segment) => Array.isArray(segment) ? segment[0] : '').filter(Boolean).join('')
+          : '';
+        if (!translated.trim()) throw new Error('Google Translate returned an empty translation');
+      } catch (error) {
+        failures.push(`Google Translate: ${error.message}`);
       }
-      if (!translated || !translated.trim()) {
+
+      if (!translated.trim()) {
         try {
-          const response = await fetch(
-            'https://api.mymemory.translated.net/get?q=' +
-            encodeURIComponent(textToTranslate) + '&langpair=auto|' + targetLang,
-            { timeout: 20000 }
-          );
-          if (response.ok) {
-            const data = await response.json();
-            if (data && data.responseData && data.responseData.translatedText) {
-              translated = data.responseData.translatedText;
-            }
-          }
-        } catch (e) {}
+          const myMemoryUrl = new URL('https://api.mymemory.translated.net/get');
+          myMemoryUrl.search = new URLSearchParams({
+            q: textToTranslate,
+            langpair: `autodetect|${targetLang}`
+          }).toString();
+          const response = await fetch(myMemoryUrl.toString(), { timeout: TRANSLATION_TIMEOUT_MS });
+          if (!response.ok) throw new Error(`MyMemory returned HTTP ${response.status}`);
+          const data = await response.json();
+          translated = data?.responseData?.translatedText || '';
+          if (!translated.trim()) throw new Error(data?.responseDetails || 'MyMemory returned an empty translation');
+        } catch (error) {
+          failures.push(`MyMemory: ${error.message}`);
+        }
       }
-      if (!translated || !translated.trim()) {
-        translated = await generateContent([
-          {
-            text: 'Translate into ' + targetLang + ' (' + LANGUAGE_CODES[targetLang] +
-              '). Return only the translation.\n\n' + textToTranslate
-          }
-        ], {
-          apiKey: getKey(extra.sender),
-          senderId: extra.sender,
-          temperature: 0.2,
-          maxOutputTokens: 1200,
-          timeout: 45000
-        });
+
+      if (!translated.trim()) {
+        try {
+          translated = await generateContent([
+            {
+              text: 'Translate into ' + targetLang + ' (' + LANGUAGE_CODES[targetLang] +
+                '). Return only the translation.\n\n' + textToTranslate
+            }
+          ], {
+            apiKey: getKey(extra.sender),
+            senderId: extra.sender,
+            temperature: 0.2,
+            maxOutputTokens: 1200,
+            timeout: 10000,
+            totalTimeout: 12000,
+            fast: true
+          });
+        } catch (error) {
+          failures.push(`AI fallback: ${error.message}`);
+          throw new Error(`All translation services failed.\n${failures.join('\n')}`);
+        }
       }
       translated = String(translated || '').trim();
       if (!translated) throw new Error('Empty translation');

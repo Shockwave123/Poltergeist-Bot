@@ -7,7 +7,7 @@
 
 module.exports = {
   name: 'randomnum',
-  aliases: ['rand', 'randomnumber', 'dice'],
+  aliases: ['rand', 'randomnumber'],
   category: 'utility',
   description: 'Generate a random number within a range',
   usage: '.randomnum [min] [max]\nExample: .randomnum 1 100\nExample: .randomnum (defaults 1-100)',

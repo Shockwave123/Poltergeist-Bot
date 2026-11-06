@@ -34,7 +34,7 @@ function unwrapMessage(message) {
   return content;
 }
 
-async function resolveStream(url, platform, query) {
+async function resolveStream(url, platform, query, audioOnly = false) {
   const platformLower = String(platform || '').toLowerCase();
   const failures = [];
 
@@ -45,17 +45,6 @@ async function resolveStream(url, platform, query) {
       return { audio: response.buffer, mimeType: 'audio/mpeg', filename: `${stream.title || 'soundcloud'}.mp3`, source: stream.url };
     } catch (error) {
       failures.push(`soundcloud: ${error.message}`);
-    }
-  }
-
-  if (platformLower === 'spotify') {
-    try {
-      const result = await mediaResolver.spotifyResolve(url || query);
-      if (!result?.url) throw new Error('No downloadable preview is available for that Spotify link.');
-      const response = await fetchPublicUrl(result.url, { maxBytes: MAX_AUDIO_BYTES, accept: 'audio/*,application/octet-stream' });
-      return { audio: response.buffer, mimeType: result.mimetype || 'audio/mp4', filename: result.filename || 'spotify.m4a', source: result.url };
-    } catch (error) {
-      failures.push(`spotify: ${error.message}`);
     }
   }
 
@@ -100,6 +89,20 @@ async function resolveStream(url, platform, query) {
 
   if (platformLower === 'youtube') {
     try {
+      if (audioOnly) {
+        const result = await mediaResolver.youtubeDlAudio(url);
+        const response = await fetchPublicUrl(result.url, {
+          maxBytes: MAX_AUDIO_BYTES,
+          accept: 'audio/*,application/octet-stream'
+        });
+        return {
+          audio: response.buffer,
+          mimeType: result.mimetype || response.contentType.split(';')[0].trim() || 'audio/mp4',
+          filename: result.filename || 'youtube-audio.m4a',
+          source: result.source || url
+        };
+      }
+
       const result = await mediaResolver.youtubeVideo(url, '720p');
       // youtubeDlVideo may return _buffer when ffmpeg merged locally
       if (result._buffer) {
@@ -227,7 +230,7 @@ module.exports = {
   aliases: ['directdownload'],
   category: 'media',
   description: 'Download media from links: TikTok, YouTube, Instagram, Facebook, Twitter/X, Pinterest, SoundCloud, Spotify, iTunes/Deezer, MediaFire and GoFile — or reply to a media message.',
-  usage: '.download <media url>',
+  usage: '.download <media url> | .download audio <song url>',
 
   async execute(sock, msg, args, extra) {
     try {
@@ -265,12 +268,45 @@ module.exports = {
         mimeType = directVideoMessage?.mimetype || directAudioMessage?.mimetype || 'application/octet-stream';
         fileName = directVideoMessage?.fileName || directAudioMessage?.fileName || 'download';
       } else if (args[0]) {
-        const url = String(args[0]).trim();
+        const audioOnly = String(args[0]).toLowerCase() === 'audio';
+        const url = String(args[audioOnly ? 1 : 0] || '').trim();
+        if (!url) {
+          return extra.reply('Use `.download <media URL>` or `.download audio <song URL>`.');
+        }
         if (url.indexOf('http://') !== 0 && url.indexOf('https://') !== 0) {
           return extra.reply('Provide a full http(s) URL, or reply to a media file you can share.');
         }
         const platform = mediaResolver.detectPlatform(url);
-        const resolved = await resolveStream(url, platform, args.join(' ').trim());
+        if (platform === 'spotify') {
+          const track = await mediaResolver.spotifyTrackDetails(url);
+          const query = [track.artist, track.title].filter(Boolean).join(' ');
+          const lines = [
+            '🎵 *Spotify track details*',
+            `*Title:* ${track.title}`,
+            ...(track.artist ? [`*Artist:* ${track.artist}`] : []),
+            ...(track.album ? [`*Album:* ${track.album}`] : []),
+            ...(track.year ? [`*Year:* ${track.year}`] : []),
+            '',
+            `▶️ *Listen on Spotify:* ${track.spotifyUrl}`
+          ];
+
+          if (track.artist) {
+            lines.push(
+              '',
+              '*Search for a legal purchase/download:*',
+              `• Bandcamp: https://bandcamp.com/search?q=${encodeURIComponent(query)}`,
+              `• Artist stores: https://www.google.com/search?q=${encodeURIComponent(`"${track.artist}" "${track.title}" official store download`)}`
+            );
+            lines.push('', '_Check the artist and track/version before purchasing; search results are not verified listings._');
+          } else {
+            lines.push('', 'I could not verify the artist from Spotify, so I have not generated purchase-search links that might point to a different song.');
+          }
+
+          return extra.reply(lines.join('\n'));
+        }
+
+        const query = args.slice(audioOnly ? 2 : 1).join(' ').trim();
+        const resolved = await resolveStream(url, platform, query, audioOnly);
 
         if (resolved.buffer && resolved.buffer.length > 0) {
           buffer = resolved.buffer;
@@ -309,6 +345,10 @@ module.exports = {
       const isAudio = mimeType.startsWith('audio/');
       const isVideo = mimeType.startsWith('video/');
 
+      if (args[0]?.toLowerCase() === 'audio' && !isAudio) {
+        throw new Error('Audio mode needs a downloadable audio link, or a supported song link such as YouTube, SoundCloud, or Spotify.');
+      }
+
       if (asDocument) {
         return sock.sendMessage(extra.from, { document: buffer, mimetype: mimeType, fileName }, { quoted: msg });
       }
@@ -325,4 +365,3 @@ module.exports = {
     }
   }
 };
-

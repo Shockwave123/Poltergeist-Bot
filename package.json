@@ -7,7 +7,7 @@
     "scripts": {
         "start": "node --max-old-space-size=460 --expose-gc --optimize-for-size index.js",
         "dev": "nodemon index.js",
-        "test": "node tests/session-manager.test.js",
+        "test": "node tests/session-manager.test.js && node tests/apikeys.test.js && node tests/chatbot-tts.test.js",
         "readme": "node scripts/update-readme.js",
         "postinstall": "node scripts/patch-baileys.js && node scripts/update-readme.js",
         "install:no-puppeteer": "PUPPETEER_SKIP_DOWNLOAD=true PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install"
@@ -39,6 +39,7 @@
         "lottie-web": "^5.13.0",
         "moment-timezone": "^0.5.45",
         "mumaker": "^2.0.0",
+        "node-edge-tts": "^1.2.12",
         "node-fetch": "^2.7.0",
         "node-webpmux": "^3.1.7",
         "pdf-parse": "1.1.1",

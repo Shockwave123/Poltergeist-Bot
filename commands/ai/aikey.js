@@ -44,7 +44,7 @@ const buildHealthBlock = (prefix) => {
 
 module.exports = {
   name: 'aikey',
-  aliases: ['googleai', 'gemini', 'openrouter', 'aiconfig', 'setkey', 'aistatus'],
+  aliases: ['aiconfig', 'setkey', 'aistatus'],
   category: 'ai',
   description: 'Manage your personal Google Gemini or OpenRouter API key',
   usage: '.aikey | .aikey set <key> | .aikey test | .aikey status | .aikey remove',

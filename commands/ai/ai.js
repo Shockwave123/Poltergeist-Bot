@@ -7,15 +7,16 @@ const { getKey } = require('../../utils/userApiKeys');
 
 module.exports = {
   name: 'ai',
-  aliases: ['gpt', 'chatgpt', 'ask'],
+  aliases: ['chat', 'chatgpt', 'ask'],
   category: 'ai',
   description: 'Chat with AI (ChatGPT-style)',
   usage: '.ai <question>',
   
   async execute(sock, msg, args, extra) {
     try {
+      const commandName = extra.commandName || 'ai';
       if (args.length === 0) {
-        return extra.reply(`❌ Usage: ${extra.prefix || '.'}ai <question>\n\nExample: ${extra.prefix || '.'}ai What is the capital of France?`);
+        return extra.reply(`❌ Usage: ${extra.prefix || '.'}${commandName} <question>\n\nExample: ${extra.prefix || '.'}${commandName} What is the capital of France?`);
       }
       
       const question = args.join(' ');
@@ -24,7 +25,10 @@ module.exports = {
         apiKey: getKey(extra.sender),
         senderId: extra.sender,
         temperature: 0.6,
-        maxOutputTokens: 800,
+        maxOutputTokens: 600,
+        timeout: 12000,
+        totalTimeout: 22000,
+        fast: true,
       });
       await extra.reply(answer);
       

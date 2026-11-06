@@ -4,7 +4,7 @@
  * Long text is automatically chunked (~190 chars) and merged with FFmpeg.
  */
 
-const { generateSpeech, parseTtsInput } = require('../../utils/tts');
+const { generateSpeech, parseTtsInput, VOICE_PRESETS } = require('../../utils/tts');
 const { toPTT } = require('../../utils/converter');
 
 function unwrapMessage(message) {
@@ -53,12 +53,20 @@ module.exports = {
       // Determine the text to speak
       let text = '';
       let lang = 'en';
+      let voice = '';
 
       // Check if we have args with text
       if (args && args.length > 0) {
+        if (args[0].toLowerCase() === 'voices') {
+          const voiceList = Object.entries(VOICE_PRESETS)
+            .map(([alias, preset]) => `• ${alias} — ${preset.name}`)
+            .join('\n');
+          return extra.reply(`*Natural voice presets*\n${voiceList}\n\nExample: \`.tts guy Hello, how are you?\``);
+        }
         const parsed = parseTtsInput(args);
         text = parsed.text;
         lang = parsed.lang;
+        voice = parsed.voice || '';
       }
 
       // If no text from args, try the replied-to message
@@ -78,13 +86,14 @@ module.exports = {
           'Example: `.tts hi how are you`\n' +
           'Example: `.tts hi namaste kaise ho`\n' +
           'Reply to a message with `.tts` to speak it\n' +
+          'Use `.tts voices` to see natural voice choices.\n' +
           'Lang codes: en, hi, id, es, fr, de, pt, ar, ja, ko'
         );
       }
 
       await extra.react('🎙️');
 
-      const mp3Buffer = await generateSpeech(text, lang);
+      const mp3Buffer = await generateSpeech(text, lang, voice);
 
       let audioBuffer = mp3Buffer;
       let mimetype = 'audio/ogg; codecs=opus';

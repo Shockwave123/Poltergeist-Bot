@@ -46,7 +46,9 @@ async function resolveStream(url, platform, query) {
   if (platformLower === 'spotify') {
     try {
       const result = await mediaResolver.spotifyResolve(url || query);
-      if (!result?.url) throw new Error('No downloadable preview is available for that Spotify link.');
+      if (!result?.previewVerified || !result?.url) {
+        throw new Error('No preview with an exact title and artist match is available.');
+      }
       const response = await fetchPublicUrl(result.url, { maxBytes: MAX_AUDIO_BYTES, accept: 'audio/*,application/octet-stream' });
       return { audio: response.buffer, mimeType: result.mimetype || 'audio/mp4', filename: result.filename || 'spotify.m4a', source: result.url };
     } catch (error) {
@@ -174,6 +176,8 @@ module.exports = {
           audio = resolved.audio;
           mimetype = resolved.mimeType || 'audio/mpeg';
           fileName = resolved.filename || path.basename(new URL(resolved.source || url).pathname) || 'audio';
+        } else if (platform === 'spotify') {
+          return extra.reply('No preview with an exact title and artist match is available. Use `.download <Spotify track link>` for the track details and legal purchase-search links.');
         } else {
           // Direct file link: accept audio OR video URLs — video is converted to MP3 below.
           const response = await fetchPublicUrl(url, {

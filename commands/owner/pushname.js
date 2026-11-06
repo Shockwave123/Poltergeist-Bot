@@ -14,7 +14,7 @@ const resolveJid = (target) => {
 
 module.exports = {
   name: 'pushname',
-  aliases: ['setname', 'changename'],
+  aliases: ['changename'],
   category: 'owner',
   description: 'View or change the WhatsApp display name of the linked account (owner only)',
   usage: '.pushname | .pushname <new name> | .pushname reset',

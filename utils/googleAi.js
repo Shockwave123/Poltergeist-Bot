@@ -204,6 +204,15 @@ function classifyAiError(error) {
   return 'other';
 }
 
+function getRequestTimeout(options, fallback) {
+  const configuredTimeout = Number(options.timeout) > 0 ? Number(options.timeout) : fallback;
+  if (!Number.isFinite(options.deadline)) return configuredTimeout;
+
+  const remaining = options.deadline - Date.now();
+  if (remaining <= 0) throw new Error('AI request time budget exceeded.');
+  return Math.min(configuredTimeout, remaining);
+}
+
 /**
  * Snapshot of provider health for diagnostics (`.health`, `.aikey` status).
  */
@@ -283,14 +292,14 @@ function rankGeminiModel(name) {
 }
 
 // Asks Google which models this API key can actually call generateContent on.
-async function discoverGeminiModels(apiKey) {
+async function discoverGeminiModels(apiKey, options = {}) {
   const cached = discoveredGeminiModelsCache.get(apiKey);
   if (cached && Date.now() - cached.fetchedAt < MODEL_CACHE_TTL) return cached.models;
 
   const response = await axios.get('https://generativelanguage.googleapis.com/v1beta/models', {
     params: { pageSize: 100 },
     headers: { 'x-goog-api-key': apiKey },
-    timeout: 30000,
+    timeout: getRequestTimeout(options, 30000),
   });
 
   const models = (response.data?.models || [])
@@ -322,6 +331,7 @@ async function generateGeminiContent(parts, apiKey, options = {}) {
 
   const candidates = [workingGeminiModelCache.get(apiKey), ...configuredModels]
     .filter((model, idx, arr) => model && arr.indexOf(model) === idx);
+  const modelCandidates = options.fast ? candidates.slice(0, 2) : candidates;
 
   const tried = [];
   let response = null;
@@ -330,14 +340,15 @@ async function generateGeminiContent(parts, apiKey, options = {}) {
   const attemptModel = async (model) => {
     tried.push(model);
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    const maxAttempts = options.fast ? 1 : 2;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         return await axios.post(apiUrl, payload, {
           headers: {
             'Content-Type': 'application/json',
             'x-goog-api-key': apiKey,
           },
-          timeout: options.timeout || 90000,
+          timeout: getRequestTimeout(options, 90000),
         });
       } catch (error) {
         lastError = error;
@@ -348,14 +359,14 @@ async function generateGeminiContent(parts, apiKey, options = {}) {
         }
         if (status === 429 && attempt === 2) return null; // Quota exhausted, try fallback
         const retryable = !error.response || status === 408 || status === 429 || status >= 500;
-        if (attempt === 2 || !retryable) throw error;
+        if (attempt === maxAttempts || !retryable) throw error;
         await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
       }
     }
     return null;
   };
 
-  for (const model of candidates) {
+  for (const model of modelCandidates) {
     response = await attemptModel(model);
     if (response) break;
     if (workingGeminiModelCache.get(apiKey) === model) workingGeminiModelCache.delete(apiKey);
@@ -365,11 +376,12 @@ async function generateGeminiContent(parts, apiKey, options = {}) {
   if (!response && lastError?.response?.status === 404) {
     let discovered = [];
     try {
-      discovered = await discoverGeminiModels(apiKey);
+      discovered = await discoverGeminiModels(apiKey, options);
     } catch (e) {
       // Best-effort discovery
     }
-    for (const model of discovered) {
+    const discoveredCandidates = options.fast ? discovered.slice(0, 2) : discovered;
+    for (const model of discoveredCandidates) {
       if (tried.includes(model)) continue;
       response = await attemptModel(model);
       if (response) break;
@@ -441,11 +453,12 @@ async function generateOpenRouterContent(parts, apiKey, options = {}) {
 
   const uniqueModels = [workingOpenRouterModelCache.get(apiKey), ...modelPool]
     .filter((m, idx, arr) => m && arr.indexOf(m) === idx);
+  const modelsToTry = options.fast ? uniqueModels.slice(0, 2) : uniqueModels;
 
   let lastError = null;
   const tried = [];
 
-  for (const model of uniqueModels) {
+  for (const model of modelsToTry) {
     tried.push(model);
     try {
       const response = await axios.post(
@@ -463,7 +476,7 @@ async function generateOpenRouterContent(parts, apiKey, options = {}) {
             'X-Title': 'Poltergeist MD WhatsApp Bot',
             'Content-Type': 'application/json',
           },
-          timeout: options.timeout || 90000,
+          timeout: getRequestTimeout(options, 90000),
         }
       );
 
@@ -523,6 +536,9 @@ async function generateContent(parts, options = {}) {
 
   // testAiKey()/explicit key checks must not silently succeed on a fallback key
   const candidates = options.noFailover ? chain.slice(0, 1) : chain;
+  const requestOptions = Number(options.totalTimeout) > 0
+    ? { ...options, deadline: Date.now() + Number(options.totalTimeout) }
+    : options;
 
   const preferred = candidates.filter((entry) => !isKeyCoolingDown(entry.healthId));
   const ordered = preferred.length ? preferred : candidates; // all cooling down? try anyway
@@ -530,10 +546,15 @@ async function generateContent(parts, options = {}) {
   const failures = [];
 
   for (const entry of ordered) {
+    if (Number.isFinite(requestOptions.deadline) && Date.now() >= requestOptions.deadline) {
+      failures.push('AI request time budget exceeded.');
+      break;
+    }
+
     try {
       const text = entry.provider === 'openrouter'
-        ? await generateOpenRouterContent(parts, entry.key, options)
-        : await generateGeminiContent(parts, entry.key, options);
+        ? await generateOpenRouterContent(parts, entry.key, requestOptions)
+        : await generateGeminiContent(parts, entry.key, requestOptions);
 
       markKeyOk(entry.healthId);
 

@@ -3,7 +3,7 @@
  *
  * Usage:
  *   .fix <error or description> (attach/quote code or a screenshot)
- *   .code <same as .fix>
+ *   .debug <same as .fix>
  *
  * Sources accepted (in priority order):
  *   1. Direct/quoted image (code screenshot) -> multimodal Gemini vision
@@ -42,7 +42,7 @@ const FIX_SYSTEM_RULES = [
 
 module.exports = {
   name: 'fix',
-  aliases: ['code', 'debug', 'fixbug'],
+  aliases: ['debug', 'fixbug'],
   category: 'ai',
   description: 'Debug and fix code from text, a quoted message, or a code screenshot',
   usage: '.fix <error/description> (attach or quote code)  |  .code <same>',

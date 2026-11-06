@@ -7,7 +7,7 @@ const axios = require('axios');
 
 module.exports = {
   name: 'meme',
-  aliases: ['memes'],
+  aliases: [],
   category: 'fun',
   description: 'Get random memes',
   usage: '.meme',

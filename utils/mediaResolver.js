@@ -40,7 +40,7 @@ const URL_PATTERNS = {
   instagram: /instagram\.com\/(?:p|reel|reels|tv)\//i,
   facebook: /(?:facebook\.com\/(?:watch|reel|.*\/videos\/|.*\/reel\/)|fb\.watch\/|fb\.com\/)/i,
   twitter: /(?:twitter\.com|x\.com)\//i,
-  spotify: /open\.spotify\.com\/(track|album|playlist|episode)\//i,
+  spotify: /open\.spotify\.com\/(?:intl-[a-z]{2}\/)?(track|album|playlist|episode)\//i,
   soundcloud: /soundcloud\.com\//i,
   pinterest: /(?:pinterest\.[a-z.]+\/pin\/|pin\.it\/)/i,
   audiomack: /audiomack\.com\//i,
@@ -76,11 +76,12 @@ function metaTagValue(html, key) {
 
 /* ------------------------------ YouTube ------------------------------ */
 
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
 const INNERTUBE_CLIENTS = [
-  { name: 'WEB', context: { clientName: 'WEB', clientVersion: '2.20240304.00.00', hl: 'en', gl: 'US' }, key: process.env.YOUTUBE_API_KEY_WEB || 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8' },
-  { name: 'ANDROID', context: { clientName: 'ANDROID', clientVersion: '19.09.37', androidSdkVersion: 30, hl: 'en', gl: 'US' }, key: process.env.YOUTUBE_API_KEY_ANDROID || 'AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w' },
-  { name: 'IOS', context: { clientName: 'IOS', clientVersion: '19.09.3', deviceMake: 'Apple', deviceModel: 'iPhone16,2', hl: 'en', gl: 'US' }, key: process.env.YOUTUBE_API_KEY_IOS || 'AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc' },
-  { name: 'TVHTML5', context: { clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER', clientVersion: '2.0', hl: 'en', gl: 'US' }, key: process.env.YOUTUBE_API_KEY_TV || 'AIzaSyDCU8hBy_m-8Ed1SUUoVAkywOz2IMwClMw' }
+  { name: 'WEB', context: { clientName: 'WEB', clientVersion: '2.20240304.00.00', hl: 'en', gl: 'US' }, key: process.env.YOUTUBE_API_KEY_WEB || YOUTUBE_API_KEY || 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8' },
+  { name: 'ANDROID', context: { clientName: 'ANDROID', clientVersion: '19.09.37', androidSdkVersion: 30, hl: 'en', gl: 'US' }, key: process.env.YOUTUBE_API_KEY_ANDROID || YOUTUBE_API_KEY || 'AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w' },
+  { name: 'IOS', context: { clientName: 'IOS', clientVersion: '19.09.3', deviceMake: 'Apple', deviceModel: 'iPhone16,2', hl: 'en', gl: 'US' }, key: process.env.YOUTUBE_API_KEY_IOS || YOUTUBE_API_KEY || 'AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc' },
+  { name: 'TVHTML5', context: { clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER', clientVersion: '2.0', hl: 'en', gl: 'US' }, key: process.env.YOUTUBE_API_KEY_TV || YOUTUBE_API_KEY || 'AIzaSyDCU8hBy_m-8Ed1SUUoVAkywOz2IMwClMw' }
 ];
 
 function decodeSignature() {
@@ -460,35 +461,98 @@ function cleanSpotifyUrl(url) {
   }
 }
 
-async function spotifyResolve(url) {
-  const cleanUrl = cleanSpotifyUrl(url);
+function decodeHtmlEntities(value) {
+  return String(value || '')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>');
+}
 
-  let title = 'Spotify track';
-  try {
-    const oembed = await HTTP.get('https://open.spotify.com/oembed', {
-      params: { url: cleanUrl },
-      headers: { Accept: 'application/json' },
-    });
-    if (oembed.data && typeof oembed.data === 'object' && oembed.data.title) {
-      title = oembed.data.title;
-    }
-  } catch {
-    // oEmbed failed — fall through to itunes search
+function normalizeTrackText(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^\p{Letter}\p{Number}]+/gu, ' ')
+    .trim();
+}
+
+async function spotifyTrackDetails(url) {
+  const cleanUrl = cleanSpotifyUrl(url);
+  const parsedUrl = new URL(cleanUrl);
+  const trackId = parsedUrl.pathname.match(/^\/(?:intl-[a-z]{2}\/)?track\/([A-Za-z0-9]+)\/?$/i)?.[1];
+  if (!trackId) {
+    throw new Error('Use a Spotify link to a single track, not an album or playlist.');
   }
 
-  const itunes = await itunesSearch(title, 1);
-  const match = itunes[0];
-  if (!match) throw new Error('Could not match that Spotify item to a downloadable preview.');
+  let title = '';
+  let artist = '';
+  let album = '';
+  let year = '';
+  let description = '';
+  try {
+    const page = await HTTP.get(`https://open.spotify.com/track/${trackId}`, {
+      headers: { Accept: 'text/html,application/xhtml+xml' }
+    });
+    if (page.status >= 200 && page.status < 300) {
+      title = decodeHtmlEntities(metaTagValue(page.data, 'og:title') || '');
+      description = decodeHtmlEntities(metaTagValue(page.data, 'og:description') || '');
+      const [artistPart = '', albumPart = ''] = description.split(/\s*·\s*/);
+      artist = artistPart.trim();
+      album = albumPart.trim();
+      year = description.match(/\b(19|20)\d{2}\b/)?.[0] || '';
+    }
+  } catch (error) {
+    throw new Error(`Could not read Spotify track details: ${error.message}`);
+  }
+
+  if (!title) {
+    const oembed = await HTTP.get('https://open.spotify.com/oembed', {
+      params: { url: cleanUrl },
+      headers: { Accept: 'application/json' }
+    });
+    title = decodeHtmlEntities(oembed.data?.title || '');
+  }
+  if (!title) throw new Error('Spotify did not return a title for that track.');
+
   return {
-    title: match.title,
-    author: match.author,
-    thumbnail: match.thumbnail,
-    duration: match.duration,
+    title,
+    artist,
+    album,
+    year,
     source: cleanUrl,
-    spotifyTitle: title,
-    url: match.url,
-    mimetype: 'audio/mp4',
-    filename: cleanName(match.title) + '.m4a'
+    spotifyUrl: cleanUrl,
+    trackId
+  };
+}
+
+async function spotifyResolve(url) {
+  const track = await spotifyTrackDetails(url);
+  if (!track.artist) {
+    return { ...track, url: null, previewVerified: false };
+  }
+
+  const candidates = await itunesSearch(`${track.artist} ${track.title}`, 25);
+  const normalizedTitle = normalizeTrackText(track.title);
+  const normalizedArtist = normalizeTrackText(track.artist);
+  const normalizedAlbum = normalizeTrackText(track.album);
+  const match = candidates.find((candidate) =>
+    normalizeTrackText(candidate.title) === normalizedTitle
+    && normalizeTrackText(candidate.author) === normalizedArtist
+    && (!normalizedAlbum || normalizeTrackText(candidate.album) === normalizedAlbum)
+  );
+
+  return {
+    ...track,
+    author: track.artist,
+    thumbnail: match?.thumbnail || '',
+    duration: match?.duration || 0,
+    url: match?.url || null,
+    mimetype: match?.mimetype || 'audio/mp4',
+    filename: match ? `${cleanName(track.title)}.m4a` : null,
+    previewVerified: Boolean(match?.url)
   };
 }
 /* ------------------------------ iTunes ------------------------------- */
@@ -986,6 +1050,7 @@ module.exports = {
   facebookDownload,
   twitterDownload,
   spotifyResolve,
+  spotifyTrackDetails,
   itunesSearch,
   resolveMusic,
   deezerSearch,
@@ -1005,4 +1070,3 @@ module.exports = {
   cleanName,
   HTTP
 };
-
