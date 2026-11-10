@@ -7,7 +7,7 @@
     "scripts": {
         "start": "node --max-old-space-size=460 --expose-gc --optimize-for-size index.js",
         "dev": "nodemon index.js",
-        "test": "node tests/session-manager.test.js && node tests/apikeys.test.js && node tests/chatbot-tts.test.js",
+        "test": "node tests/session-manager.test.js && node tests/apikeys.test.js && node tests/chatbot-tts.test.js && node tests/badwords.test.js",
         "readme": "node scripts/update-readme.js",
         "postinstall": "node scripts/patch-baileys.js && node scripts/update-readme.js",
         "install:no-puppeteer": "PUPPETEER_SKIP_DOWNLOAD=true PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install"

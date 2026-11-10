@@ -153,8 +153,10 @@ async function getAIResponse(userMessage, userContext) {
     apiKey: userContext.apiKey,
     temperature: 0.85,
     topP: 0.9,
-    maxOutputTokens: 120,
-    timeout: 30000,
+    maxOutputTokens: userContext.fast ? 90 : 120,
+    fast: userContext.fast === true,
+    timeout: userContext.fast ? 15000 : 30000,
+    totalTimeout: userContext.fast ? 15000 : undefined,
   });
   return cleanResponse(reply, userMessage);
 }
@@ -245,9 +247,9 @@ async function handleContinuousChat(sock, msg, text, chatId) {
   const response = await getAIResponse(text.trim(), {
     messages,
     userInfo: chatMemory.userInfo.get(memoryKey),
-    historyLimit: MAX_CONTEXT_MESSAGES,
+    historyLimit: 10,
+    fast: true,
   });
-  await showTyping(sock, chatId, getTypingDelay(response.length));
   await sock.sendMessage(chatId, { text: response }, { quoted: msg });
   messages.push({ role: 'assistant', text: response });
   if (messages.length > MAX_CONTEXT_MESSAGES) messages.shift();

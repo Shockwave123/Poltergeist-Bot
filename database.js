@@ -156,10 +156,10 @@ const updateUser = (userId, data) => {
 const getWarnings = (groupId, userId) => {
   const warnings = readDB(WARNINGS_DB);
   const key = `${groupId}_${userId}`;
-  return warnings[key] || { count: 0, warnings: [] };
+  return warnings[key] || { count: 0, warnings: [], maxWarnings: null };
 };
 
-const addWarning = (groupId, userId, reason) => {
+const addWarning = (groupId, userId, reason, maxWarnings) => {
   const warnings = readDB(WARNINGS_DB);
   const key = `${groupId}_${userId}`;
   
@@ -172,6 +172,9 @@ const addWarning = (groupId, userId, reason) => {
     reason,
     date: Date.now()
   });
+  if (Number.isInteger(maxWarnings) && maxWarnings > 0) {
+    warnings[key].maxWarnings = maxWarnings;
+  }
   
   writeDB(WARNINGS_DB, warnings);
   return warnings[key];

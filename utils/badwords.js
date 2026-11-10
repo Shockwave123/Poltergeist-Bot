@@ -27,30 +27,34 @@ const BAD_WORDS = [
   'hash', 'trip', 'rolling', 'ma chuda', 'maa chuda', 'maa chudao', 'chudao', 'chuda'
 ];
 
-const MULTI_WORD_BAD = BAD_WORDS.filter((w) => w.includes(' '));
-const SINGLE_WORD_BAD = new Set(BAD_WORDS.filter((w) => !w.includes(' ')));
-
-function containsBadWord(text) {
-  if (!text || typeof text !== 'string') return false;
-
-  const cleanMessage = text.toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
+function normalizeBadWord(value) {
+  if (typeof value !== 'string') return '';
+  return value.normalize('NFKC').toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
 
-  if (!cleanMessage) return false;
+function containsBadWord(text, customWords = []) {
+  if (!text || typeof text !== 'string') return false;
 
-  for (const phrase of MULTI_WORD_BAD) {
-    if (cleanMessage.includes(phrase)) return true;
-  }
+  const messageWords = normalizeBadWord(text).split(' ').filter(Boolean);
+  if (!messageWords.length) return false;
 
-  const messageWords = cleanMessage.split(' ');
-  for (const word of messageWords) {
-    if (word.length < 2) continue;
-    if (SINGLE_WORD_BAD.has(word)) return true;
+  const blocked = [...BAD_WORDS, ...(Array.isArray(customWords) ? customWords : [])]
+    .map(normalizeBadWord)
+    .filter(Boolean)
+    .map((word) => word.split(' '));
+
+  for (const blockedWords of blocked) {
+    for (let i = 0; i <= messageWords.length - blockedWords.length; i++) {
+      if (blockedWords.every((word, offset) => messageWords[i + offset] === word)) {
+        return true;
+      }
+    }
   }
 
   return false;
 }
 
-module.exports = { BAD_WORDS, containsBadWord };
+module.exports = { BAD_WORDS, containsBadWord, normalizeBadWord };

@@ -948,8 +948,11 @@ const handleMessage = async (sock, msg) => {
     const command = commands.get(commandName);
     if (!command) return;
     
-    // Check self mode (private mode) - only owner can use commands
-    if (config.selfMode && !isOwner(sender)) {
+    const senderIsOwner = isOwner(sender);
+    const senderIsSudo = database.isSudoUser(sender);
+
+    // Private mode allows sudo users, but owner-only commands remain owner-only.
+    if (config.selfMode && !senderIsOwner && !senderIsSudo) {
       return;
     }
     
@@ -958,7 +961,7 @@ const handleMessage = async (sock, msg) => {
       return sock.sendMessage(from, { text: config.messages.ownerOnly }, { quoted: msg });
     }
     
-    if (command.modOnly && !isMod(sender) && !isOwner(sender)) {
+    if (command.modOnly && !isMod(sender) && !senderIsOwner && !senderIsSudo) {
       return sock.sendMessage(from, { text: '🔒 This command is only for moderators!' }, { quoted: msg });
     }
     
@@ -970,7 +973,7 @@ const handleMessage = async (sock, msg) => {
       return sock.sendMessage(from, { text: config.messages.privateOnly }, { quoted: msg });
     }
     
-    if (command.adminOnly && !(await isAdmin(sock, sender, from, groupMetadata)) && !isOwner(sender)) {
+    if (command.adminOnly && !(await isAdmin(sock, sender, from, groupMetadata)) && !senderIsOwner && !senderIsSudo) {
       return sock.sendMessage(from, { text: config.messages.adminOnly }, { quoted: msg });
     }
     
@@ -1411,7 +1414,7 @@ const handleAntibadword = async (sock, msg, groupMetadata, userMessage, sender) 
     const from = msg.key.remoteJid;
     const groupSettings = database.getGroupSettings(from);
     if (!groupSettings.antibadword) return false;
-    if (!containsBadWord(userMessage)) return false;
+    if (!containsBadWord(userMessage, groupSettings.antibadwordWords)) return false;
 
     const senderIsAdmin = await isAdmin(sock, sender, from, groupMetadata);
     const senderIsOwner = isOwner(sender);
@@ -1428,7 +1431,7 @@ const handleAntibadword = async (sock, msg, groupMetadata, userMessage, sender) 
     }
 
     const action = (groupSettings.antibadwordAction || 'delete').toLowerCase();
-    const maxWarnings = config.maxWarnings || 3;
+    const defaultMaxWarnings = config.maxWarnings || 3;
 
     if (action === 'kick') {
       try {
@@ -1442,6 +1445,7 @@ const handleAntibadword = async (sock, msg, groupMetadata, userMessage, sender) 
       }
     } else if (action === 'warn') {
       const result = database.addWarning(from, sender, 'Bad words');
+      const maxWarnings = result.maxWarnings || defaultMaxWarnings;
       if (result.count >= maxWarnings) {
         try {
           await sock.groupParticipantsUpdate(from, [sender], 'remove');

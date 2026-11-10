@@ -163,12 +163,12 @@ The welcome message sent after connection includes a short bot introduction and 
 | | |
 | --- | --- |
 | 🤖 **Bot version** | `1.0.4` |
-| ⚡ **Commands** | **244** across **9** categories (prefix `.`) |
-| 📦 **Direct dependencies** | **26** |
+| ⚡ **Commands** | **248** across **9** categories (prefix `.`) |
+| 📦 **Direct dependencies** | **27** |
 | 🟢 **Node.js required** | `>=20.19` |
 
 <details>
-<summary><b>🗂️ Full command index (244)</b></summary>
+<summary><b>🗂️ Full command index (248)</b></summary>
 
 #### 🧭 GENERAL · 36
 `.account` · `.archive` · `.attp` · `.crop` · `.define` · `.dm`
@@ -178,11 +178,12 @@ The welcome message sent after connection includes a short bot introduction and 
 `.setupguide` · `.simage` · `.ssweb` · `.star` · `.sticker` · `.take`
 `.transcribe` · `.translate` · `.tts` · `.uptime` · `.viewonce` · `.wikipedia`
 
-#### 🤖 AI · 23
+#### 🤖 AI · 26
 `.ai` · `.aikey` · `.bio` · `.debate` · `.deepread` · `.dream`
-`.email` · `.explain` · `.factcheck` · `.fix` · `.flashcards` · `.gptimage`
-`.grammar` · `.imagine` · `.persona` · `.poem` · `.recipe` · `.rephrase`
-`.sentiment` · `.studyplan` · `.tweet` · `.vision` · `.workout`
+`.email` · `.explain` · `.factcheck` · `.fix` · `.flashcards` · `.gpt`
+`.gptimage` · `.grammar` · `.imagine` · `.llama` · `.mistral` · `.persona`
+`.poem` · `.recipe` · `.rephrase` · `.sentiment` · `.studyplan` · `.tweet`
+`.vision` · `.workout`
 
 #### 👾 ANIME · 2
 `.anime` · `.random`
@@ -209,45 +210,6 @@ The welcome message sent after connection includes a short bot introduction and 
 `.convert` · `.countdown` · `.currency` · `.datecalc` · `.emoji` · `.encode`
 `.ip` · `.password` · `.randomnum` · `.shorturl` · `.time` · `.tip`
 `.todo` · `.vocab` · `.weather`
-#### 🆕 NEW COMMANDS · 13
-`.base64` · `.crun` · `.gpt` · `.llama` · `.mistral`
-`.alamy` · `.apkdl` · `.addreply` · `.antidelete`
-`.cmdreact` · `.autoreact` · `.audiofx` · `.attp`
-`.coding`
-
-#### 🎯 EMOJI STATUS SYSTEM
-All commands now include visual emoji feedback:
-
-**Working Emoji** (shown when command starts processing):
-- `🔡` - Base64 encoding/decoding
-- `🤖` - AI commands thinking (gpt/llama/mistral)
-- `🦙` - Llama AI specifically
-- `🪄` - Mistral AI
-- `➕` - Add/create operations (addreply, new features)
-- `🎧` - Audio effects processing
-- `💻` - Programming/image commands
-
-**Done Emoji** (included in response text):
-- `🔗` - Encoded/transformed results (base64)
-- `✅` - Successful completion
-- `❌` - Error messages
-
-**Example Flow**:
-```
-User: .base64 Hello World
-Bot: [🔡 reaction] → [Processing...] → *🔗 Base64 Encoded:* SGVsbG8gV29ybGQ=
-
-User: .gpt quantum physics
-Bot: [🤖 reaction] → [AI processing...] → *✅ AI Response:* [answer]
-
-User: .antidelete on
-Bot: [➕ reaction] → [✅ Antidelete enabled!]
-```
-#### 🖋️ TEXTMAKER · 21
-`.1917` · `.arena` · `.blackpink` · `.codm` · `.devil` · `.efootball`
-`.fire` · `.glitch` · `.hacker` · `.ice` · `.impressive` · `.leaves`
-`.light` · `.matrix` · `.metallic` · `.neon` · `.pubg` · `.purple`
-`.sand` · `.snow` · `.thunder`
 
 #### 🖋️ TEXTMAKER · 21
 `.1917` · `.arena` · `.blackpink` · `.codm` · `.devil` · `.efootball`
@@ -263,13 +225,13 @@ Bot: [➕ reaction] → [✅ Antidelete enabled!]
 `.setgoodbye` · `.setwelcome` · `.tagadmins` · `.tagall` · `.unmute` · `.warn`
 `.warnlist` · `.welcome`
 
-#### 👑 OWNER · 34
-`.afk` · `.anticall` · `.archiveall` · `.autochat` · `.autoreact` · `.autoread`
-`.autostatus` · `.block` · `.blocklist` · `.broadcast` · `.clearcache` · `.getss`
-`.googleai` · `.health` · `.mode` · `.newsletter` · `.privacy` · `.private`
-`.public` · `.pushname` · `.readall` · `.restart` · `.session` · `.setbio`
-`.setbotname` · `.setbotpp` · `.setmenuimage` · `.setnewsletter` · `.setprefix` · `.stats`
-`.sudo` · `.unblock` · `.update` · `.wafeed`
+#### 👑 OWNER · 35
+`.afk` · `.anticall` · `.apikeys` · `.archiveall` · `.autochat` · `.autoreact`
+`.autoread` · `.autostatus` · `.block` · `.blocklist` · `.broadcast` · `.clearcache`
+`.getss` · `.googleai` · `.health` · `.mode` · `.newsletter` · `.privacy`
+`.private` · `.public` · `.pushname` · `.readall` · `.restart` · `.session`
+`.setbio` · `.setbotname` · `.setbotpp` · `.setmenuimage` · `.setnewsletter` · `.setprefix`
+`.stats` · `.sudo` · `.unblock` · `.update` · `.wafeed`
 
 </details>
 <!-- stats:end -->

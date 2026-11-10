@@ -95,7 +95,7 @@ async function resolveSudoUser(sock, storedJid, groupMetadata, from) {
 module.exports = {
   name: 'sudo',
   aliases: ['sudouser'],
-  description: 'Add or remove sudo users (owner-like privileges)',
+  description: 'Add or remove sudo users (all commands except owner-only commands)',
   usage: '.sudo add @user | .sudo remove @user | .sudo list',
   category: 'owner',
   ownerOnly: true,
@@ -130,7 +130,7 @@ module.exports = {
 
         const text =
           `🔐 *Sudo Users*\n\n` +
-          `Sudo users have owner-like privileges (can use owner commands in private mode).\n\n` +
+          `Sudo users can use commands (including in private mode), except owner-only commands.\n\n` +
           `*Usage:*\n` +
           `  .sudo add @user - Add sudo (mention user)\n` +
           `  .sudo add <number> - Add sudo by number\n` +

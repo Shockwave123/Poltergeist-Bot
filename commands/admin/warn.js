@@ -10,7 +10,7 @@ module.exports = {
   aliases: ['warning'],
   category: 'admin',
   description: 'Warn a user',
-  usage: '.warn @user <reason>',
+  usage: '.warn @user [limit] [reason]',
   groupOnly: true,
   adminOnly: true,
   botAdminNeeded: true,
@@ -28,7 +28,21 @@ module.exports = {
         return extra.reply('❌ Please mention or reply to the user to warn!\n\nExample: .warn @user Breaking rules');
       }
       
-      const reason = args.slice(mentioned.length > 0 ? 1 : 0).join(' ') || 'No reason specified';
+      const remainingArgs = args.slice(mentioned.length > 0 ? 1 : 0);
+      let requestedLimit;
+      if (remainingArgs[0] === '--limit') {
+        if (!/^\d+$/.test(remainingArgs[1] || '') || Number(remainingArgs[1]) < 1) {
+          return extra.reply('❌ Warning limit must be a positive whole number. Example: .warn @user --limit 3 Spamming');
+        }
+        requestedLimit = Number(remainingArgs[1]);
+        remainingArgs.splice(0, 2);
+      } else if (/^\d+$/.test(remainingArgs[0] || '')) {
+        requestedLimit = Number(remainingArgs.shift());
+        if (requestedLimit < 1) {
+          return extra.reply('❌ Warning limit must be a positive whole number.');
+        }
+      }
+      const reason = remainingArgs.join(' ') || 'No reason specified';
       
       // Cannot warn admins
       const foundParticipant = extra.groupMetadata.participants.find(
@@ -39,14 +53,15 @@ module.exports = {
         return extra.reply('❌ Cannot warn an admin!');
       }
       
-      const warnings = database.addWarning(extra.from, target, reason);
+      const warnings = database.addWarning(extra.from, target, reason, requestedLimit);
+      const maxWarnings = warnings.maxWarnings || config.maxWarnings || 3;
       
       let text = `⚠️ *USER WARNING*\n\n`;
       text += `👤 User: @${target.split('@')[0]}\n`;
       text += `📝 Reason: ${reason}\n`;
-      text += `⚠️ Warnings: ${warnings.count}/${config.maxWarnings}\n\n`;
+      text += `⚠️ Warnings: ${warnings.count}/${maxWarnings}\n\n`;
       
-      if (warnings.count >= config.maxWarnings) {
+      if (warnings.count >= maxWarnings) {
         text += `❌ User has reached maximum warnings and will be removed!`;
         
         await sock.sendMessage(extra.from, {
@@ -59,7 +74,7 @@ module.exports = {
           database.clearWarnings(extra.from, target);
         }
       } else {
-        text += `⚠️ Next warning will result in removal!`;
+        text += `⚠️ ${maxWarnings - warnings.count} more warning(s) before removal.`;
         
         await sock.sendMessage(extra.from, {
           text,
