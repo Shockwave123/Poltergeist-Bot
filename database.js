@@ -233,9 +233,15 @@ const isModerator = (userId) => {
 
 // Sudo Users System - stores full JIDs (e.g. 602455062940@s.whatsapp.net or xyz@lid)
 const toStoredJid = (input) => {
-  const s = String(input).trim();
+  let s = String(input).trim();
   if (!s) return null;
-  if (s.includes('@')) return s; // Already a JID
+  const jidMatch = s.match(/^([^@\s]+)@(s\.whatsapp\.net|c\.us|lid|hosted|hosted\.lid)$/i);
+  if (jidMatch) {
+    const user = jidMatch[1].split(':')[0];
+    const server = jidMatch[2].toLowerCase() === 'c.us' ? 's.whatsapp.net' : jidMatch[2].toLowerCase();
+    return `${user}@${server}`;
+  }
+  s = s.replace(/^@+/, '');
   const digits = s.replace(/\D/g, '');
   return digits.length >= 10 ? `${digits}@s.whatsapp.net` : null;
 };
@@ -243,12 +249,14 @@ const toStoredJid = (input) => {
 const getSudoUsers = () => {
   const sudo = readDB(SUDO_DB);
   const raw = sudo.sudoUsers || [];
-  return raw.map((entry) => (entry.includes('@') ? entry : `${entry}@s.whatsapp.net`));
+  return raw.map(toStoredJid).filter(Boolean);
 };
 
 const addSudoUser = (userIdOrJid) => {
   const sudo = readDB(SUDO_DB);
-  if (!sudo.sudoUsers) sudo.sudoUsers = [];
+  sudo.sudoUsers = (Array.isArray(sudo.sudoUsers) ? sudo.sudoUsers : [])
+    .map(toStoredJid)
+    .filter(Boolean);
   const jid = toStoredJid(userIdOrJid);
   if (!jid) return false;
   if (!sudo.sudoUsers.includes(jid)) {
@@ -266,7 +274,8 @@ const removeSudoUser = (userIdOrJid) => {
   const before = sudo.sudoUsers.length;
   const jidUser = jid.split('@')[0];
   sudo.sudoUsers = sudo.sudoUsers.filter((entry) => {
-    const entryJid = entry.includes('@') ? entry : `${entry}@s.whatsapp.net`;
+    const entryJid = toStoredJid(entry);
+    if (!entryJid) return false;
     const entryUser = entryJid.split('@')[0];
     return entryJid !== jid && entryUser !== jidUser;
   });

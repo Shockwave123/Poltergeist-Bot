@@ -8,14 +8,18 @@ const sessionPath = path.join(root, sessionName);
 const statePath = path.join(root, 'database', `sudo-test-${process.pid}.json`);
 const pnUser = '2348012345678';
 const lidUser = '12345678901234';
+const taggedUser = '2348098765432';
 
 process.env.SUDO_DB_FILE = statePath;
+fs.writeFileSync(statePath, JSON.stringify({ sudoUsers: [`@${pnUser}`] }));
 
 const config = require('../config');
 config.sessionName = sessionName;
 const database = require('../database');
 const store = require('../utils/messageStore');
+const sudoCommand = require('../commands/owner/sudo');
 
+async function run() {
 try {
   fs.mkdirSync(sessionPath, { recursive: true });
   fs.writeFileSync(
@@ -27,7 +31,28 @@ try {
     JSON.stringify(pnUser)
   );
 
-  assert.equal(database.addSudoUser(`${pnUser}@s.whatsapp.net`), true);
+  assert.deepEqual(database.getSudoUsers(), [`${pnUser}@s.whatsapp.net`]);
+  assert.equal(database.isSudoUser(`${pnUser}@s.whatsapp.net`), true);
+
+  const commandMessage = {
+    key: { remoteJid: 'owner@s.whatsapp.net' },
+    message: {
+      extendedTextMessage: {
+        text: `.sudo add @${taggedUser}`,
+        contextInfo: { mentionedJid: [`${taggedUser}@s.whatsapp.net`] }
+      }
+    }
+  };
+  await sudoCommand.execute({
+    sendMessage: async () => {}
+  }, commandMessage, ['add', `@${taggedUser}`], {
+    from: 'owner@s.whatsapp.net',
+    isGroup: false,
+    reply: async (text) => { throw new Error(`Unexpected command error: ${text}`); }
+  });
+  assert.equal(database.isSudoUser(`${taggedUser}@s.whatsapp.net`), true);
+
+  assert.equal(database.addSudoUser(`${pnUser}@s.whatsapp.net`), false);
   assert.equal(database.isSudoUser(`${pnUser}:4@s.whatsapp.net`), true);
   assert.equal(database.isSudoUser(pnUser), true);
   assert.equal(database.isSudoUser(`${lidUser}@lid`), true);
@@ -50,32 +75,28 @@ try {
     message: { conversation: 'cached content' }
   };
   listeners.get('messages.upsert')({ messages: [cachedMessage] });
-  store.loadMessage('chat@g.us', 'message-1').then((loaded) => {
-    assert.deepEqual(loaded.message, { conversation: 'cached content' });
+  const loaded = await store.loadMessage('chat@g.us', 'message-1');
+  assert.deepEqual(loaded.message, { conversation: 'cached content' });
 
-    for (let i = 0; i < store.maxPerChat + 1; i++) {
-      store.add({ key: { remoteJid: 'bounded@g.us', id: `m${i}` }, message: {} });
-    }
-    assert.equal(store.messages.get('bounded@g.us').size, store.maxPerChat);
-    for (let i = 0; i < store.maxChats + 1; i++) {
-      store.add({ key: { remoteJid: `chat-${i}@g.us`, id: 'm1' }, message: {} });
-    }
-    assert.equal(store.messages.size, store.maxChats);
+  for (let i = 0; i < store.maxPerChat + 1; i++) {
+    store.add({ key: { remoteJid: 'bounded@g.us', id: `m${i}` }, message: {} });
+  }
+  assert.equal(store.messages.get('bounded@g.us').size, store.maxPerChat);
+  for (let i = 0; i < store.maxChats + 1; i++) {
+    store.add({ key: { remoteJid: `chat-${i}@g.us`, id: 'm1' }, message: {} });
+  }
+  assert.equal(store.messages.size, store.maxChats);
 
-    database.flushAll();
-    console.log('Sudo permission and Baileys message-store tests passed.');
-  }).catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  }).finally(() => {
-    store.messages.clear();
-    fs.rmSync(statePath, { force: true });
-    fs.rmSync(sessionPath, { recursive: true, force: true });
-  });
-} catch (error) {
   database.flushAll();
+  console.log('Sudo permission and Baileys message-store tests passed.');
+} finally {
   store.messages.clear();
   fs.rmSync(statePath, { force: true });
   fs.rmSync(sessionPath, { recursive: true, force: true });
-  throw error;
 }
+}
+
+run().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

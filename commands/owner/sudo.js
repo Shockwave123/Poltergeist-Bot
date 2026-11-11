@@ -13,9 +13,14 @@ const normalizeNumber = (input) => {
 };
 
 const toJid = (input) => {
-  const s = String(input).trim();
+  let s = String(input).trim();
   if (!s) return null;
-  if (s.includes('@')) return s;
+  const jidMatch = s.match(/^([^@\s]+)@(s\.whatsapp\.net|c\.us|lid|hosted|hosted\.lid)$/i);
+  if (jidMatch) {
+    const server = jidMatch[2].toLowerCase() === 'c.us' ? 's.whatsapp.net' : jidMatch[2].toLowerCase();
+    return `${jidMatch[1]}@${server}`;
+  }
+  s = s.replace(/^@+/, '');
   const n = normalizeNumber(s);
   return n && n.length >= 10 ? `${n}@s.whatsapp.net` : null;
 };
@@ -203,7 +208,11 @@ module.exports = {
         return extra.reply(`*${commandName} is no longer allowed for sudo users in private mode.*`);
       }
 
+      const mentionedJid = extractMentionedJid(msg);
       let inputJid = args[1] ? toJid(args[1]) : null;
+      if (args[1]?.startsWith('@') && mentionedJid?.includes('@')) {
+        inputJid = mentionedJid;
+      }
 
       // Resolve target: args[1] number -> reply participant -> @mention
       if (!inputJid && (action === 'add' || action === 'a' || action === 'remove' || action === 'rem' || action === 'del' || action === 'r')) {
@@ -214,9 +223,7 @@ module.exports = {
         const quotedParticipant = ctx?.participant;
         if (quotedParticipant) {
           inputJid = quotedParticipant;
-        } else {
-          inputJid = extractMentionedJid(msg);
-        }
+        } else inputJid = mentionedJid;
         if (!inputJid && !isGroup && msg.key?.remoteJid?.includes('@')) {
           inputJid = msg.key.remoteJid;
         }
