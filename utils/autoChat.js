@@ -9,12 +9,17 @@ const STATE_FILE = process.env.AUTOCHAT_STATE_FILE || path.join(__dirname, '../d
 const MAX_RECENT_MESSAGES = 20;
 const MAX_CONVERSATION_MESSAGES = 20;
 const MAX_MESSAGE_LENGTH = 1000;
+const SAVE_DEBOUNCE_MS = 250;
+let cachedState = null;
+let pendingSave = null;
 
 function loadState() {
+  if (cachedState) return cachedState;
+
   try {
     if (fs.existsSync(STATE_FILE)) {
       const parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-      return {
+      cachedState = {
         enabled: false,
         chatId: null,
         dmEnabled: false,
@@ -22,23 +27,43 @@ function loadState() {
         conversations: {},
         ...(parsed && typeof parsed === 'object' ? parsed : {})
       };
+      return cachedState;
     }
   } catch (error) {
     console.error('[autochat] load error:', error.message);
   }
-  return { enabled: false, chatId: null, dmEnabled: false, history: {}, conversations: {} };
+  cachedState = { enabled: false, chatId: null, dmEnabled: false, history: {}, conversations: {} };
+  return cachedState;
 }
 
-function saveState(state) {
+function flushState() {
   try {
     const directory = path.dirname(STATE_FILE);
     if (!fs.existsSync(directory)) fs.mkdirSync(directory, { recursive: true });
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
+    fs.writeFileSync(STATE_FILE, JSON.stringify(cachedState, null, 2), 'utf8');
     return true;
   } catch (error) {
     console.error('[autochat] save error:', error.message);
     return false;
   }
+}
+
+function saveState(state, immediate = false) {
+  cachedState = state;
+  if (immediate) {
+    if (pendingSave) clearTimeout(pendingSave);
+    pendingSave = null;
+    return flushState();
+  }
+
+  if (!pendingSave) {
+    pendingSave = setTimeout(() => {
+      pendingSave = null;
+      flushState();
+    }, SAVE_DEBOUNCE_MS);
+    if (typeof pendingSave.unref === 'function') pendingSave.unref();
+  }
+  return true;
 }
 
 function getActiveChat() {
@@ -52,13 +77,13 @@ function enable(chatId) {
   if (activeChat && activeChat !== chatId) {
     return { enabled: false, activeChat };
   }
-  saveState({ ...state, enabled: true, chatId });
+  saveState({ ...state, enabled: true, chatId }, true);
   return { enabled: true, activeChat: chatId };
 }
 
 function disable() {
   const state = loadState();
-  saveState({ ...state, enabled: false, chatId: null });
+  saveState({ ...state, enabled: false, chatId: null }, true);
 }
 
 function isDmEnabled() {
@@ -67,7 +92,7 @@ function isDmEnabled() {
 
 function setDmEnabled(enabled) {
   const state = loadState();
-  return saveState({ ...state, dmEnabled: enabled === true });
+  return saveState({ ...state, dmEnabled: enabled === true }, true);
 }
 
 function recordMessage(chatId, text) {

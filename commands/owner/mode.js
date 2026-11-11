@@ -20,7 +20,7 @@ module.exports = {
       if (!args[0]) {
         const currentMode = config.selfMode ? 'private' : 'public';
         const description = config.selfMode 
-          ? 'Only owner and sudo users can use non-owner commands'
+          ? 'Owner can use all commands; sudo users can use their allowed commands'
           : 'Everyone can use commands';
         
         return extra.reply(
@@ -28,7 +28,7 @@ module.exports = {
           `Current Mode: *${currentMode.toUpperCase()}*\n` +
           `Status: ${description}\n\n` +
           `Usage:\n` +
-          `  .mode private - Only owner and sudo can use non-owner commands\n` +
+          `  .mode private - Restrict commands to owner and sudo users\n` +
           `  .mode public - Everyone can use`
         );
       }
@@ -37,13 +37,13 @@ module.exports = {
       
       if (mode === 'private' || mode === 'priv') {
         if (config.selfMode) {
-          return extra.reply('🔒 Bot is already in *PRIVATE* mode.\nOnly owner and sudo can use non-owner commands.');
+          return extra.reply('🔒 Bot is already in *PRIVATE* mode.\nOnly the owner and permitted sudo users can use commands.');
         }
         
         // Update config
         updateConfig('selfMode', true);
         config.selfMode = true; // Update runtime config
-        return extra.reply('🔒 Bot mode changed to *PRIVATE*\n\nOnly owner and sudo can use non-owner commands now.');
+        return extra.reply('🔒 Bot mode changed to *PRIVATE*\n\nOnly the owner and permitted sudo users can use commands now.');
       }
       
       if (mode === 'public' || mode === 'pub') {

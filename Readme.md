@@ -233,6 +233,11 @@ The welcome message sent after connection includes a short bot introduction and 
 `.setbio` · `.setbotname` · `.setbotpp` · `.setmenuimage` · `.setnewsletter` · `.setprefix`
 `.stats` · `.sudo` · `.unblock` · `.update` · `.wafeed`
 
+In private mode, sudo users can be given a shared command allowlist by the owner:
+`.sudo allow add <command>`, `.sudo allow remove <command>`, `.sudo allow list`,
+`.sudo allow clear`, or `.sudo allow reset`. Until configured, sudo access keeps
+the existing default of all non-owner commands.
+
 </details>
 <!-- stats:end -->
 
@@ -248,6 +253,7 @@ The welcome message sent after connection includes a short bot introduction and 
 - This bot is created **for educational purposes only**.  
 - This is **NOT** an official WhatsApp bot.  
 - Using third‑party bots **may violate WhatsApp’s Terms of Service** and can lead to your account being **banned**.
+- Baileys is unofficial and its maintainers discourage spam, bulk messaging, and stalkerware. Use messaging and group-tagging features only responsibly and with appropriate consent.
 
 > You use this bot **at your own risk**.  
 > The developers are **not responsible** for any bans, issues, or damages resulting from its use.
@@ -286,4 +292,3 @@ This project contains code from various open‑source projects and AI tools, inc
 
 - **Baileys** – MIT License  
 - Other libraries as listed in `package.json`
-

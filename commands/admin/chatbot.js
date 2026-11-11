@@ -1,12 +1,11 @@
 /**
  * AI Chatbot - Natural WhatsApp chat on @mention or reply
- * API: api.princetechn.com
  */
 
 const config = require('../../config');
 const database = require('../../database');
 const { sendVoiceNote } = require('../../utils/voiceNote');
-const { generateContent, getSetupMessage } = require('../../utils/googleAi');
+const { generateContent } = require('../../utils/googleAi');
 const { getKey } = require('../../utils/userApiKeys');
 
 const chatMemory = {
@@ -15,10 +14,29 @@ const chatMemory = {
 };
 
 const MAX_CONTEXT_MESSAGES = 20;
+const MAX_CHAT_MEMORY_ENTRIES = 200;
+const MAX_USER_INFO_ENTRIES = 500;
 const EMOJI_PATTERN = '[\\u{1F300}-\\u{1FAFF}\\u2600-\\u27BF]';
 
+function getMemoryValue(map, key) {
+  const value = map.get(key);
+  if (value !== undefined) {
+    map.delete(key);
+    map.set(key, value);
+  }
+  return value;
+}
+
+function setMemoryValue(map, key, value, limit) {
+  map.delete(key);
+  map.set(key, value);
+  while (map.size > limit) {
+    map.delete(map.keys().next().value);
+  }
+}
+
 function getTypingDelay(charCount) {
-  return Math.min(Math.max(350, charCount * 30), 3000);
+  return Math.min(Math.max(200, charCount * 12), 1000);
 }
 
 async function showTyping(sock, chatId, ms = 1500) {
@@ -154,9 +172,9 @@ async function getAIResponse(userMessage, userContext) {
     temperature: 0.85,
     topP: 0.9,
     maxOutputTokens: userContext.fast ? 90 : 120,
-    fast: userContext.fast === true,
-    timeout: userContext.fast ? 15000 : 30000,
-    totalTimeout: userContext.fast ? 15000 : undefined,
+    fast: true,
+    timeout: 10000,
+    totalTimeout: 25000,
   });
   return cleanResponse(reply, userMessage);
 }
@@ -168,31 +186,31 @@ async function handleChat(sock, msg, text, senderId, options = {}) {
   const mentionOnly = !cleanedMessage;
 
   try {
-    if (!chatMemory.messages.has(memoryKey)) {
+    if (!getMemoryValue(chatMemory.messages, memoryKey)) {
       const recent = require('../../utils/autoChat').getRecentConversation(chatId);
       const seed = recent[recent.length - 1]?.role === 'user' && recent[recent.length - 1].text === cleanedMessage
         ? recent.slice(0, -1)
         : recent;
-      chatMemory.messages.set(memoryKey, seed);
+      setMemoryValue(chatMemory.messages, memoryKey, seed, MAX_CHAT_MEMORY_ENTRIES);
     }
-    if (!chatMemory.userInfo.has(senderId)) {
-      chatMemory.userInfo.set(senderId, {});
+    if (!getMemoryValue(chatMemory.userInfo, senderId)) {
+      setMemoryValue(chatMemory.userInfo, senderId, {}, MAX_USER_INFO_ENTRIES);
     }
 
     if (mentionOnly) {
       await showTyping(sock, chatId, getTypingDelay(MENTION_ONLY_FALLBACK.length));
-      return sock.sendMessage(chatId, { text: MENTION_ONLY_FALLBACK }, { quoted: msg });
+      return sock.sendMessage(chatId, { text: MENTION_ONLY_FALLBACK });
     }
 
     const userInfo = extractUserInfo(cleanedMessage);
     if (Object.keys(userInfo).length > 0) {
-      chatMemory.userInfo.set(senderId, {
-        ...chatMemory.userInfo.get(senderId),
+      setMemoryValue(chatMemory.userInfo, senderId, {
+        ...getMemoryValue(chatMemory.userInfo, senderId),
         ...userInfo
-      });
+      }, MAX_USER_INFO_ENTRIES);
     }
 
-    const messages = chatMemory.messages.get(memoryKey);
+    const messages = getMemoryValue(chatMemory.messages, memoryKey);
     messages.push({ role: 'user', text: cleanedMessage });
     if (messages.length > MAX_CONTEXT_MESSAGES) messages.shift();
 
@@ -200,7 +218,7 @@ async function handleChat(sock, msg, text, senderId, options = {}) {
 
     const response = await getAIResponse(cleanedMessage, {
       messages,
-      userInfo: chatMemory.userInfo.get(senderId),
+      userInfo: getMemoryValue(chatMemory.userInfo, senderId),
       apiKey: getKey(senderId)
     });
 
@@ -210,10 +228,10 @@ async function handleChat(sock, msg, text, senderId, options = {}) {
         await sendVoiceNote(sock, chatId, response, msg);
       } catch (voiceError) {
         console.error('[chatbot] voice reply error:', voiceError.message);
-        await sock.sendMessage(chatId, { text: response }, { quoted: msg });
+        await sock.sendMessage(chatId, { text: response });
       }
     } else {
-      await sock.sendMessage(chatId, { text: response }, { quoted: msg });
+      await sock.sendMessage(chatId, { text: response });
     }
     messages.push({ role: 'assistant', text: response });
     if (messages.length > MAX_CONTEXT_MESSAGES) messages.shift();
@@ -223,34 +241,34 @@ async function handleChat(sock, msg, text, senderId, options = {}) {
     try {
       await sock.sendMessage(chatId, {
         text: mentionOnly ? MENTION_ONLY_FALLBACK : 'Oops! Got confused, try asking again.'
-      }, { quoted: msg });
+      });
     } catch { /* ignore */ }
   }
 }
 
 async function handleContinuousChat(sock, msg, text, chatId) {
   const memoryKey = `continuous:${chatId}`;
-  if (!chatMemory.messages.has(memoryKey)) {
+  if (!getMemoryValue(chatMemory.messages, memoryKey)) {
     const recent = require('../../utils/autoChat').getRecentConversation(chatId);
     const seed = recent[recent.length - 1]?.role === 'user' && recent[recent.length - 1].text === text.trim()
       ? recent.slice(0, -1)
       : recent;
-    chatMemory.messages.set(memoryKey, seed);
-    chatMemory.userInfo.set(memoryKey, {});
+    setMemoryValue(chatMemory.messages, memoryKey, seed, MAX_CHAT_MEMORY_ENTRIES);
+    setMemoryValue(chatMemory.userInfo, memoryKey, {}, MAX_USER_INFO_ENTRIES);
   }
 
-  const messages = chatMemory.messages.get(memoryKey);
+  const messages = getMemoryValue(chatMemory.messages, memoryKey);
   messages.push({ role: 'user', text: text.trim() });
   if (messages.length > MAX_CONTEXT_MESSAGES) messages.shift();
 
   await sock.sendPresenceUpdate('composing', chatId);
   const response = await getAIResponse(text.trim(), {
     messages,
-    userInfo: chatMemory.userInfo.get(memoryKey),
+    userInfo: getMemoryValue(chatMemory.userInfo, memoryKey),
     historyLimit: 10,
     fast: true,
   });
-  await sock.sendMessage(chatId, { text: response }, { quoted: msg });
+  await sock.sendMessage(chatId, { text: response });
   messages.push({ role: 'assistant', text: response });
   if (messages.length > MAX_CONTEXT_MESSAGES) messages.shift();
   require('../../utils/autoChat').recordBotReply(chatId, response);

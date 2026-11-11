@@ -90,6 +90,7 @@ const config = require('./config');
 const handler = require('./handler');
 const database = require('./database');
 const sessionManager = require('./utils/sessionManager');
+const store = require('./utils/messageStore');
 const { stopCleanup, cleanupOldFiles } = require('./utils/cleanup');
 const fs = require('fs');
 const path = require('path');
@@ -598,39 +599,6 @@ function cleanupPuppeteerCache() {
     console.error('⚠️ Failed to cleanup Puppeteer cache:', err.message || err);
   }
 }
-// Optimized in-memory store with hard limits (Map-based for better memory management)
-const store = {
-  messages: new Map(), // Use Map instead of plain object
-  maxPerChat: 20, // Limit to 20 messages per chat
-
-  bind: (ev) => {
-    ev.on('messages.upsert', ({ messages }) => {
-      for (const msg of messages) {
-        if (!msg.key?.id) continue;
-
-        const jid = msg.key.remoteJid;
-        if (!store.messages.has(jid)) {
-          store.messages.set(jid, new Map());
-        }
-
-        const chatMsgs = store.messages.get(jid);
-        chatMsgs.set(msg.key.id, msg);
-
-        // Aggressive cleanup per chat - keep only recent messages
-        if (chatMsgs.size > store.maxPerChat) {
-          // Remove oldest message (first entry in Map)
-          const oldestKey = chatMsgs.keys().next().value;
-          chatMsgs.delete(oldestKey);
-        }
-      }
-    });
-  },
-
-  loadMessage: async (jid, id) => {
-    return store.messages.get(jid)?.get(id) || null;
-  }
-};
-
 // Optimized message deduplication (Set-based, no timestamps needed)
 const processedMessages = new Set();
 
@@ -1256,7 +1224,7 @@ async function startBot(reason = 'startup') {
       keepAliveIntervalMs: 30000,
       retryRequestDelayMs: 2000,
       qrTimeout: 60000,
-      getMessage: async () => undefined // Don't load messages from store
+      getMessage: async (key) => (await store.loadMessage(key.remoteJid, key.id))?.message
     });
 
     const generation = ++socketGeneration;
@@ -1524,22 +1492,7 @@ async function startBot(reason = 'startup') {
       // Store message FIRST (before processing)
       // from already defined above in DM block check
       if (msg.key && msg.key.id) {
-        if (!store.messages.has(from)) {
-          store.messages.set(from, new Map());
-        }
-        const chatMsgs = store.messages.get(from);
-        chatMsgs.set(msg.key.id, msg);
-
-        // Cleanup: Keep only last 20 per chat (reduced from 200)
-        if (chatMsgs.size > store.maxPerChat) {
-          // Remove oldest messages
-          const sortedIds = Array.from(chatMsgs.entries())
-            .sort((a, b) => (a[1].messageTimestamp || 0) - (b[1].messageTimestamp || 0))
-            .map(([id]) => id);
-          for (let i = 0; i < sortedIds.length - store.maxPerChat; i++) {
-            chatMsgs.delete(sortedIds[i]);
-          }
-        }
+        store.add(msg);
       }
 
       // Process command IMMEDIATELY (don't block on other operations)

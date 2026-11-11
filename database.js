@@ -5,13 +5,14 @@
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
+const { buildComparableIds } = require('./utils/jidHelper');
 
 const DB_PATH = path.join(__dirname, 'database');
 const GROUPS_DB = path.join(DB_PATH, 'groups.json');
 const USERS_DB = path.join(DB_PATH, 'users.json');
 const WARNINGS_DB = path.join(DB_PATH, 'warnings.json');
 const MODS_DB = path.join(DB_PATH, 'mods.json');
-const SUDO_DB = path.join(DB_PATH, 'sudo.json');
+const SUDO_DB = process.env.SUDO_DB_FILE || path.join(DB_PATH, 'sudo.json');
 
 // Initialize database directory
 if (!fs.existsSync(DB_PATH)) {
@@ -273,21 +274,51 @@ const removeSudoUser = (userIdOrJid) => {
 };
 
 const isSudoUser = (sender) => {
-  const sudo = getSudoUsers();
   if (!sender) return false;
-  const senderStr = String(sender).trim();
-  const senderUser = senderStr.includes('@')
-    ? senderStr.split('@')[0].split(':')[0]
-    : (senderStr.replace(/\D/g, '') || senderStr);
-  if (!senderUser) return false;
-  return sudo.some((jid) => {
-    const storedUser = jid.split('@')[0]?.split(':')[0] || '';
-    if (!storedUser) return false;
-    return (
-      storedUser === senderUser ||
-      (senderUser.length >= 10 && (storedUser.startsWith(senderUser) || senderUser.startsWith(storedUser)))
-    );
-  });
+  const normalize = (jid) => {
+    const [user, server] = String(jid).trim().split('@');
+    if (!user || !server) return null;
+    return `${user.split(':')[0]}@${server === 'c.us' ? 's.whatsapp.net' : server}`;
+  };
+  const comparableIds = (jid) => [
+    jid,
+    ...buildComparableIds(jid)
+  ].map(normalize).filter(Boolean);
+
+  const senderValue = String(sender).trim();
+  const senderIds = new Set(comparableIds(senderValue));
+  if (/^\d{10,15}$/.test(senderValue)) {
+    senderIds.add(`${senderValue}@s.whatsapp.net`);
+  }
+  if (!senderIds.size) return false;
+  return getSudoUsers().some((jid) =>
+    comparableIds(jid).some((candidate) => senderIds.has(candidate))
+  );
+};
+
+const getSudoAllowedCommands = () => {
+  const sudo = readDB(SUDO_DB);
+  if (!Array.isArray(sudo.allowedCommands)) return null;
+  return [...new Set(sudo.allowedCommands
+    .filter((name) => typeof name === 'string')
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean))];
+};
+
+const setSudoAllowedCommands = (commands) => {
+  const sudo = readDB(SUDO_DB);
+  sudo.allowedCommands = commands === null
+    ? null
+    : [...new Set((Array.isArray(commands) ? commands : [])
+      .filter((name) => typeof name === 'string')
+      .map((name) => name.trim().toLowerCase())
+      .filter(Boolean))];
+  return writeDB(SUDO_DB, sudo);
+};
+
+const canSudoUseCommand = (commandName) => {
+  const allowedCommands = getSudoAllowedCommands();
+  return allowedCommands === null || allowedCommands.includes(String(commandName || '').trim().toLowerCase());
 };
 
 module.exports = {
@@ -307,6 +338,9 @@ module.exports = {
   addSudoUser,
   removeSudoUser,
   isSudoUser,
+  getSudoAllowedCommands,
+  setSudoAllowedCommands,
+  canSudoUseCommand,
   flushAll,
   getCacheSize: () => dbCache.size
 };

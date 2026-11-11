@@ -871,7 +871,7 @@ const handleMessage = async (sock, msg) => {
         console.error('[autochat] error:', autoChatError.message);
         await sock.sendMessage(from, {
           text: 'I hit a small snag. Send that again in a moment.'
-        }, { quoted: msg });
+        });
       }
       return;
     }
@@ -954,6 +954,13 @@ const handleMessage = async (sock, msg) => {
     // Private mode allows sudo users, but owner-only commands remain owner-only.
     if (config.selfMode && !senderIsOwner && !senderIsSudo) {
       return;
+    }
+
+    if (config.selfMode && senderIsSudo && !senderIsOwner
+      && !database.canSudoUseCommand(command.name)) {
+      return sock.sendMessage(from, {
+        text: `🔒 Sudo access does not include the .${command.name} command.`
+      });
     }
     
     // Permission checks

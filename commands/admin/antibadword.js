@@ -47,6 +47,9 @@ module.exports = {
         if (!word) {
           return extra.reply(`*Usage: .antibadword ${opt} <word or phrase>*`);
         }
+        if (word.split(' ').length === 1 && [...word].length < 2) {
+          return extra.reply('*Please use a bad word or phrase with at least two characters.*');
+        }
 
         const existing = words.map(normalizeBadWord).filter(Boolean);
         if (opt === 'add') {

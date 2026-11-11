@@ -44,7 +44,8 @@ function containsBadWord(text, customWords = []) {
   const blocked = [...BAD_WORDS, ...(Array.isArray(customWords) ? customWords : [])]
     .map(normalizeBadWord)
     .filter(Boolean)
-    .map((word) => word.split(' '));
+    .map((word) => word.split(' '))
+    .filter((words) => words.length > 1 || [...words[0]].length > 1);
 
   for (const blockedWords of blocked) {
     for (let i = 0; i <= messageWords.length - blockedWords.length; i++) {

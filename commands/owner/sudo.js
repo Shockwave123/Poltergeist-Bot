@@ -6,6 +6,7 @@
 
 const config = require('../../config');
 const database = require('../../database');
+const { loadCommands } = require('../../utils/commandLoader');
 
 const normalizeNumber = (input) => {
   return String(input).replace(/\D/g, '');
@@ -130,12 +131,13 @@ module.exports = {
 
         const text =
           `🔐 *Sudo Users*\n\n` +
-          `Sudo users can use commands (including in private mode), except owner-only commands.\n\n` +
+          `Sudo users can use all non-owner commands by default. In private mode, you can restrict them with \`.sudo allow\`.\n\n` +
           `*Usage:*\n` +
           `  .sudo add @user - Add sudo (mention user)\n` +
           `  .sudo add <number> - Add sudo by number\n` +
           `  .sudo remove @user - Remove sudo (mention user)\n` +
           `  .sudo list - List all sudo users\n\n` +
+          `  .sudo allow list|add|remove|clear|reset - Manage sudo command access\n\n` +
           `*Current sudo users:*\n${listText}`;
 
         await sock.sendMessage(from, { text, mentions: mentionJids }, { quoted: msg });
@@ -143,6 +145,64 @@ module.exports = {
       }
 
       const action = args[0].toLowerCase();
+      if (action === 'allow') {
+        const subAction = (args[1] || 'list').toLowerCase();
+        const allowlist = database.getSudoAllowedCommands();
+        const commandRegistry = loadCommands();
+
+        if (subAction === 'list') {
+          return extra.reply(allowlist === null
+            ? '*Sudo command access:* all non-owner commands (default).'
+            : allowlist.length
+              ? `*Sudo command access (${allowlist.length}):*\n${allowlist.map((name) => `• ${name}`).join('\n')}`
+              : '*Sudo command access:* no commands are currently allowed.');
+        }
+
+        if (subAction === 'reset') {
+          database.setSudoAllowedCommands(null);
+          return extra.reply('*Sudo command access reset to all non-owner commands.*');
+        }
+
+        if (subAction === 'clear') {
+          database.setSudoAllowedCommands([]);
+          return extra.reply('*Sudo command access cleared. Sudo users cannot run commands until you add some.*');
+        }
+
+        if (!['add', 'remove'].includes(subAction) || !args[2]) {
+          return extra.reply(
+            '*Usage:*\n' +
+            '  .sudo allow list\n' +
+            '  .sudo allow add <command>\n' +
+            '  .sudo allow remove <command>\n' +
+            '  .sudo allow clear | reset'
+          );
+        }
+
+        const command = commandRegistry.get(args[2].toLowerCase());
+        if (!command) {
+          return extra.reply(`*Unknown command:* ${args[2]}`);
+        }
+        if (command.ownerOnly) {
+          return extra.reply('*Owner-only commands cannot be granted to sudo users.*');
+        }
+
+        const commandName = command.name.toLowerCase();
+        if (subAction === 'add') {
+          const updated = [...new Set([...(allowlist || []), commandName])];
+          database.setSudoAllowedCommands(updated);
+          return extra.reply(`*${commandName} is now allowed for sudo users in private mode.*`);
+        }
+
+        const currentAllowed = allowlist === null
+          ? [...new Set([...commandRegistry.values()]
+            .filter((entry) => !entry.ownerOnly)
+            .map((entry) => entry.name.toLowerCase()))]
+          : allowlist;
+        const updated = currentAllowed.filter((name) => name !== commandName);
+        database.setSudoAllowedCommands(updated);
+        return extra.reply(`*${commandName} is no longer allowed for sudo users in private mode.*`);
+      }
+
       let inputJid = args[1] ? toJid(args[1]) : null;
 
       // Resolve target: args[1] number -> reply participant -> @mention
@@ -222,7 +282,7 @@ module.exports = {
         return;
       }
 
-      return extra.reply('❌ Invalid action!\nUsage: .sudo add/remove/list <number>');
+      return extra.reply('❌ Invalid action!\nUsage: .sudo add/remove/list/allow <number or command>');
     } catch (error) {
       console.error('Sudo command error:', error);
       await extra.reply('❌ Error executing sudo command.');

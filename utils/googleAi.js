@@ -10,10 +10,10 @@ const config = require('../config');
 // Google Gemini Configuration & Fallbacks
 // ==========================================
 const GEMINI_STATIC_MODELS = [
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
-  'gemini-1.5-flash-8b',
-  'gemini-1.5-pro',
+  'gemini-3.8-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
 ];
 
 const EXCLUDED_MODEL_PATTERN = /(image|tts|embedding|aqa|robotics|computer[-_]?use|native[-_]?audio|live[-_]?api)/i;
@@ -25,11 +25,11 @@ const workingGeminiModelCache = new Map(); // apiKey -> model name that last suc
 // OpenRouter Configuration & Fallbacks
 // ==========================================
 const OPENROUTER_TEXT_MODELS = [
+  'openrouter/auto',
   'google/gemini-2.0-flash-001',
   'deepseek/deepseek-chat',
   'meta-llama/llama-3.3-70b-instruct:free',
   'mistralai/mistral-small-24b-instruct-2501:free',
-  'openrouter/auto',
 ];
 
 const OPENROUTER_VISION_MODELS = [
@@ -46,7 +46,7 @@ setInterval(() => {
   discoveredGeminiModelsCache.clear();
   workingGeminiModelCache.clear();
   workingOpenRouterModelCache.clear();
-}, MODEL_CACHE_TTL);
+}, MODEL_CACHE_TTL).unref();
 
 /**
  * Resolve the ordered list of AI credentials to try.
