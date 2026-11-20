@@ -2,14 +2,13 @@
  * Google AI Setup Guide - Step-by-step personal API key configuration
  */
 
-const { getSetupMessage, isConfigured } = require('../../utils/googleAi');
-const { getKey } = require('../../utils/userApiKeys');
+const { getSetupMessage, isConfigured, providerLabel } = require('../../utils/googleAi');
 
 module.exports = {
   name: 'setupguide',
   aliases: ['setup', 'guide', 'aisetup', 'getstarted'],
   category: 'general',
-  description: 'Step-by-step guide to get and configure your personal Google AI key',
+  description: 'Step-by-step guide to configure AI providers',
   usage: '.setupguide',
 
   async execute(sock, msg, args, extra) {
@@ -19,13 +18,13 @@ module.exports = {
 
       let personalStatus = '❌ No personal API key saved.';
       if (personalConf?.key) {
-        const pName = personalConf.provider === 'openrouter' ? 'OpenRouter' : 'Google Gemini';
+        const pName = providerLabel(personalConf.provider);
         personalStatus = `✅ Personal ${pName} key is active.`;
       }
 
       const guide = `
 ╔═══════════════════════════════════════════════════════════════╗
-║          🤖 AI SETUP GUIDE (Gemini & OpenRouter)              ║
+║          🤖 AI SETUP GUIDE (Gemini, OpenRouter & more)         ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 *STATUS*
@@ -50,7 +49,13 @@ ${globalKey ? '✅ Bot has a global fallback API key.' : '❌ Bot has no global 
    ${extra.prefix || '.'}aikey set YOUR_KEY
 
 ───────────────────────────────────────────────────────────────
-*STEP 3: Verify It Works*
+*OPTION 3: Add failover providers (optional)*
+
+• NVIDIA NIM: https://build.nvidia.com/ — configure NVIDIA_NIM_API_KEY
+• Z.AI: https://z.ai/ — configure ZAI_API_KEY
+
+───────────────────────────────────────────────────────────────
+*STEP 4: Verify It Works*
 
 Try any of these AI commands:
 • ${extra.prefix || '.'}ai What is the speed of light?
@@ -63,15 +68,15 @@ Try any of these AI commands:
 • ${extra.prefix || '.'}aikey test (run a diagnostic test)
 
 ───────────────────────────────────────────────────────────────
-*FAILOVER: GEMINI + OPENROUTER WORK TOGETHER*
+*FAILOVER: CONFIGURED PROVIDERS WORK TOGETHER*
 
-Gemini and OpenRouter are used as a team. When one provider is offline,
-rate limited or out of quota, the bot automatically answers with the other
-one, so AI commands keep working without any manual change.
+Gemini, OpenRouter, NVIDIA NIM and Z.AI are tried in provider-priority order.
+When one provider is offline, rate limited or out of quota, the bot moves on
+to the next configured provider.
 
 • Both may be configured at the same time (recommended).
 • Extra keys can be added with a comma: GEMINI_API_KEY=key1,key2
-• Set AI_PROVIDER_PRIORITY=openrouter to try OpenRouter first.
+• Set AI_PROVIDER_PRIORITY=openrouter,nvidia,zai,gemini to control the order.
 • Check the live status of every key with: ${extra.prefix || '.'}aikey status
 
 ───────────────────────────────────────────────────────────────

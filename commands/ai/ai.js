@@ -1,5 +1,5 @@
 /**
- * AI Chat Command - ChatGPT-style responses
+ * AI Chat Command - detailed responses from the configured AI providers
  */
 
 const { generateContent } = require('../../utils/googleAi');
@@ -21,14 +21,19 @@ module.exports = {
       
       const question = args.join(' ');
       
-      const answer = await generateContent([{ text: `Answer this question clearly and naturally. Keep it concise unless detail is needed.\n\n${question}` }], {
+      const answer = await generateContent([{ text: [
+        'Answer the user’s question clearly and thoroughly.',
+        'Organize longer answers with short headings or bullet points when that improves readability.',
+        'Include useful context, reasoning, examples, and practical steps when relevant, but avoid filler.',
+        'If a detail is uncertain, say so instead of inventing facts.',
+        `Question: ${question}`
+      ].join('\n\n') }], {
         apiKey: getKey(extra.sender),
         senderId: extra.sender,
         temperature: 0.6,
-        maxOutputTokens: 600,
-        timeout: 12000,
-        totalTimeout: 22000,
-        fast: true,
+        maxOutputTokens: 1600,
+        timeout: 30000,
+        totalTimeout: 65000,
       });
       await extra.reply(answer);
       

@@ -6,23 +6,52 @@ const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const config = require('../../config');
 const { normalizeJidWithLid } = require('../../utils/jidHelper');
 
+const MEDIA_TYPES = ['imageMessage', 'videoMessage', 'audioMessage'];
+
+function unwrapMessage(message) {
+  let content = message || {};
+  for (let depth = 0; depth < 5; depth += 1) {
+    const inner = content.ephemeralMessage?.message
+      || content.documentWithCaptionMessage?.message;
+    if (!inner) break;
+    content = inner;
+  }
+  return content;
+}
+
+function getViewOnceMedia(quotedMessage) {
+  const quoted = unwrapMessage(quotedMessage);
+  const viewOnceContent = quoted.viewOnceMessageV2Extension?.message
+    || quoted.viewOnceMessageV2?.message
+    || quoted.viewOnceMessage?.message;
+  const mediaMessage = viewOnceContent ? unwrapMessage(viewOnceContent) : quoted;
+  const messageType = MEDIA_TYPES.find((type) =>
+    mediaMessage[type] && (viewOnceContent || mediaMessage[type].viewOnce)
+  );
+  return messageType
+    ? { messageType, message: { [messageType]: mediaMessage[messageType] } }
+    : null;
+}
+
 module.exports = {
   name: 'viewonce',
-  aliases: ['readvo', 'vv', 'readviewonce'],
+  aliases: ['readvo', 'vv', 'readviewonce', 'wow'],
   category: 'general',
   description: 'Reveal view-once messages and forward them to owner DM',
   usage: '.viewonce (reply to view-once message)',
+  getViewOnceMedia,
   
   async execute(sock, msg, args) {
     try {
       const chatId = msg.key.remoteJid;
 
       // Try to get contextInfo from different message types (reply can be from text, image, video, etc.)
-      const ctx = msg.message?.extendedTextMessage?.contextInfo
-        || msg.message?.imageMessage?.contextInfo
-        || msg.message?.videoMessage?.contextInfo
-        || msg.message?.buttonsResponseMessage?.contextInfo
-        || msg.message?.listResponseMessage?.contextInfo;
+      const currentMessage = unwrapMessage(msg.message);
+      const ctx = currentMessage.extendedTextMessage?.contextInfo
+        || currentMessage.imageMessage?.contextInfo
+        || currentMessage.videoMessage?.contextInfo
+        || currentMessage.buttonsResponseMessage?.contextInfo
+        || currentMessage.listResponseMessage?.contextInfo;
 
       if (!ctx?.quotedMessage || !ctx?.stanzaId) {
         return await sock.sendMessage(
@@ -32,19 +61,8 @@ module.exports = {
         );
       }
 
-      const quotedMsg = ctx.quotedMessage;
-
-      // Check various patterns used for view-once messages
-      const hasViewOnce =
-        !!quotedMsg.viewOnceMessageV2 ||
-        !!quotedMsg.viewOnceMessageV2Extension ||
-        !!quotedMsg.viewOnceMessage ||
-        !!quotedMsg.viewOnce ||
-        !!quotedMsg?.imageMessage?.viewOnce ||
-        !!quotedMsg?.videoMessage?.viewOnce ||
-        !!quotedMsg?.audioMessage?.viewOnce;
-
-      if (!hasViewOnce) {
+      const mediaInfo = getViewOnceMedia(ctx.quotedMessage);
+      if (!mediaInfo) {
         return await sock.sendMessage(
           chatId,
           { text: '❌ This is not a view-once message!' },
@@ -52,43 +70,16 @@ module.exports = {
         );
       }
 
-      let actualMsg = null;
-      let mtype = null;
-
-      // Newer Baileys: viewOnceMessageV2Extension
-      if (quotedMsg.viewOnceMessageV2Extension?.message) {
-        actualMsg = quotedMsg.viewOnceMessageV2Extension.message;
-        mtype = Object.keys(actualMsg)[0];
-
-      // Classic Baileys: viewOnceMessageV2
-      } else if (quotedMsg.viewOnceMessageV2?.message) {
-        actualMsg = quotedMsg.viewOnceMessageV2.message;
-        mtype = Object.keys(actualMsg)[0];
-
-      // Older: viewOnceMessage
-      } else if (quotedMsg.viewOnceMessage?.message) {
-        actualMsg = quotedMsg.viewOnceMessage.message;
-        mtype = Object.keys(actualMsg)[0];
-
-      // Direct message with viewOnce flag on media
-      } else if (quotedMsg.imageMessage?.viewOnce) {
-        actualMsg = { imageMessage: quotedMsg.imageMessage };
-        mtype = 'imageMessage';
-      } else if (quotedMsg.videoMessage?.viewOnce) {
-        actualMsg = { videoMessage: quotedMsg.videoMessage };
-        mtype = 'videoMessage';
-      } else if (quotedMsg.audioMessage?.viewOnce) {
-        actualMsg = { audioMessage: quotedMsg.audioMessage };
-        mtype = 'audioMessage';
-      }
-
-      if (!actualMsg || !mtype) {
-        return await sock.sendMessage(
-          chatId,
-          { text: '❌ Unsupported view-once message type.' },
-          { quoted: msg }
-        );
-      }
+      const { messageType: mtype, message: actualMsg } = mediaInfo;
+      const mediaMessage = actualMsg[mtype];
+      const targetMessage = {
+        key: {
+          remoteJid: chatId,
+          id: ctx.stanzaId,
+          participant: ctx.participant
+        },
+        message: actualMsg
+      };
 
       const downloadType =
         mtype === 'imageMessage'
@@ -99,17 +90,33 @@ module.exports = {
           ? 'audio'
           : 'document';
 
-      const mediaStream = await downloadContentFromMessage(
-        actualMsg[mtype],
-        downloadType
-      );
+      const download = async () => {
+        const mediaStream = await downloadContentFromMessage(mediaMessage, downloadType);
+        const chunks = [];
+        for await (const chunk of mediaStream) chunks.push(chunk);
+        return Buffer.concat(chunks);
+      };
 
-      let buffer = Buffer.from([]);
-      for await (const chunk of mediaStream) {
-        buffer = Buffer.concat([buffer, chunk]);
+      let buffer;
+      if (!mediaMessage.url && !mediaMessage.directPath) {
+        if (!mediaMessage.mediaKey || typeof sock.updateMediaMessage !== 'function') {
+          throw new Error('The quoted media has no download path and cannot be refreshed.');
+        }
+        await sock.updateMediaMessage(targetMessage);
       }
 
-      const caption = actualMsg[mtype]?.caption || '';
+      try {
+        buffer = await download();
+      } catch (downloadError) {
+        const status = downloadError.status || downloadError.statusCode || downloadError.output?.statusCode;
+        if (![404, 410].includes(status) || !mediaMessage.mediaKey || typeof sock.updateMediaMessage !== 'function') {
+          throw downloadError;
+        }
+        await sock.updateMediaMessage(targetMessage);
+        buffer = await download();
+      }
+
+      const caption = mediaMessage.caption || '';
       const ownerNumber = Array.isArray(config.ownerNumber)
         ? config.ownerNumber[0]
         : config.ownerNumber;
@@ -143,8 +150,8 @@ module.exports = {
       } else if (/audio/.test(mtype)) {
         await sock.sendMessage(ownerJid, {
           audio: buffer,
-          ptt: true,
-          mimetype: 'audio/ogg; codecs=opus'
+          ptt: mediaMessage.ptt === true,
+          mimetype: mediaMessage.mimetype || 'audio/ogg; codecs=opus'
         });
       } else if (mtype === 'documentMessage') {
         await sock.sendMessage(ownerJid, {

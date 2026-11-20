@@ -34,6 +34,45 @@ function unwrapMessage(message) {
   return content;
 }
 
+async function resolveSocialMedia(url, platform) {
+  let extractionError;
+  try {
+    const result = platform === 'instagram'
+      ? await mediaResolver.instagramDownload(url)
+      : await mediaResolver.facebookDownload(url);
+    const mediaUrl = result.videoUrl || result.imageUrl;
+    if (!mediaUrl) throw new Error(`No downloadable media was found on that ${platform} link.`);
+
+    const isVideo = Boolean(result.videoUrl);
+    const response = await fetchPublicUrl(mediaUrl, {
+      maxBytes: MAX_FILE_BYTES,
+      accept: isVideo ? 'video/*,application/octet-stream' : 'image/*,application/octet-stream'
+    });
+    let mimeType = response.contentType.split(';')[0].trim();
+    if (!mimeType || mimeType === 'application/octet-stream') {
+      const extension = path.extname(new URL(response.url).pathname).toLowerCase();
+      mimeType = AUDIO_TYPES[extension] || (isVideo ? 'video/mp4' : 'image/jpeg');
+    }
+    if (!mimeType.startsWith(isVideo ? 'video/' : 'image/')) {
+      throw new Error(`The ${platform} link did not return ${isVideo ? 'a video' : 'an image'} file.`);
+    }
+    return {
+      buffer: response.buffer,
+      mimeType,
+      filename: `${mediaResolver.cleanName(result.title || platform)}${isVideo ? '.mp4' : '.jpg'}`,
+      source: mediaUrl
+    };
+  } catch (error) {
+    extractionError = error;
+  }
+
+  try {
+    return await mediaResolver.ytDlpSocialDownload(url);
+  } catch (error) {
+    throw new Error(`${platform} page extraction failed: ${extractionError.message}; yt-dlp fallback failed: ${error.message}`);
+  }
+}
+
 async function resolveStream(url, platform, query, audioOnly = false) {
   const platformLower = String(platform || '').toLowerCase();
   const failures = [];
@@ -132,16 +171,7 @@ async function resolveStream(url, platform, query, audioOnly = false) {
 
   if (platformLower === 'instagram') {
     try {
-      const result = await mediaResolver.instagramDownload(url);
-      if (result.videoUrl) {
-        const response = await fetchPublicUrl(result.videoUrl, { maxBytes: MAX_FILE_BYTES, accept: 'video/*,application/octet-stream' });
-        return { buffer: response.buffer, mimeType: response.contentType.split(';')[0].trim() || 'video/mp4', filename: `${mediaResolver.cleanName(result.title)}.mp4`, source: result.videoUrl };
-      }
-      if (result.imageUrl) {
-        const response = await fetchPublicUrl(result.imageUrl, { maxBytes: MAX_FILE_BYTES, accept: 'image/*,application/octet-stream' });
-        return { buffer: response.buffer, mimeType: response.contentType.split(';')[0].trim() || 'image/jpeg', filename: `${mediaResolver.cleanName(result.title)}.jpg`, source: result.imageUrl };
-      }
-      throw new Error('No downloadable media was found on that Instagram link.');
+      return await resolveSocialMedia(url, 'instagram');
     } catch (error) {
       failures.push(`instagram: ${error.message}`);
     }
@@ -149,9 +179,7 @@ async function resolveStream(url, platform, query, audioOnly = false) {
 
   if (platformLower === 'facebook') {
     try {
-      const result = await mediaResolver.facebookDownload(url);
-      const response = await fetchPublicUrl(result.videoUrl, { maxBytes: MAX_FILE_BYTES, accept: 'video/*,application/octet-stream' });
-      return { buffer: response.buffer, mimeType: response.contentType.split(';')[0].trim() || 'video/mp4', filename: 'facebook_video.mp4', source: result.videoUrl };
+      return await resolveSocialMedia(url, 'facebook');
     } catch (error) {
       failures.push(`facebook: ${error.message}`);
     }

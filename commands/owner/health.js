@@ -85,7 +85,7 @@ module.exports = {
         '│',
         '│ 🤖 *AI PROVIDERS*',
         `│ • ${aiLine}`,
-        `│ • Priority: ${ai.priority ? ai.priority.join(' → ') : 'gemini → openrouter'}`
+        `│ • Priority: ${ai.priority ? ai.priority.join(' → ') : 'gemini → openrouter → nvidia → zai'}`
       ];
 
       if (ai.entries && ai.entries.length) {

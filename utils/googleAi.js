@@ -1,5 +1,5 @@
 /**
- * Unified AI Engine - Supports Google Gemini and OpenRouter API
+ * Unified AI Engine - Supports Google Gemini, OpenRouter, NVIDIA NIM and Z.AI
  * Seamless text and multimodal generation with dynamic model fallback.
  */
 
@@ -40,6 +40,7 @@ const OPENROUTER_VISION_MODELS = [
 ];
 
 const workingOpenRouterModelCache = new Map(); // apiKey -> model name that last succeeded
+const SUPPORTED_PROVIDERS = ['gemini', 'openrouter', 'nvidia', 'zai'];
 
 // Periodically clear model caches to prevent unbounded RAM growth
 setInterval(() => {
@@ -51,21 +52,25 @@ setInterval(() => {
 /**
  * Resolve the ordered list of AI credentials to try.
  *
- * Order: explicit key -> the user's personal key -> global Gemini keys -> global OpenRouter keys.
+ * Order: explicit key -> the user's personal key -> global provider keys.
  * Both GEMINI_API_KEY/GEMINI_API_KEYS/GOOGLE_AI_API_KEY and OPENROUTER_API_KEY/OPENROUTER_API_KEYS
  * accept several keys separated by commas, spaces or new lines, so the bot keeps answering
  * when one key runs out of quota or a provider is temporarily offline.
- * Set AI_PROVIDER_PRIORITY=openrouter to try OpenRouter before Gemini.
+ * Set AI_PROVIDER_PRIORITY to a comma-separated provider order.
  */
 function resolveAiCredentialChain(options = {}) {
   const chain = [];
   const seen = new Set();
+  const allowedProviders = Array.isArray(options.providers)
+    ? new Set(options.providers.filter((provider) => SUPPORTED_PROVIDERS.includes(provider)))
+    : null;
 
   const push = (key, provider, source) => {
     const clean = String(key || '').trim().replace(/^["']|["']$/g, '');
     if (clean.length < 15 || seen.has(clean)) return;
-    seen.add(clean);
     const resolvedProvider = provider || detectProviderFromKey(clean);
+    if (allowedProviders && !allowedProviders.has(resolvedProvider)) return;
+    seen.add(clean);
     chain.push({
       key: clean,
       provider: resolvedProvider,
@@ -75,21 +80,23 @@ function resolveAiCredentialChain(options = {}) {
     });
   };
 
-  // 1. Explicit key passed by the caller
-  if (options.apiKey && typeof options.apiKey === 'string') {
-    push(options.apiKey, options.provider, 'options');
-  }
-
-  // 2. Per-user key saved with `.aikey set`
+  let userConf = null;
   if (options.senderId) {
     try {
-      const { getUserAiConfig } = require('./userApiKeys');
-      const userConf = getUserAiConfig(options.senderId);
-      if (userConf && userConf.key) push(userConf.key, userConf.provider, 'personal');
+      userConf = require('./userApiKeys').getUserAiConfig(options.senderId);
     } catch (e) {
       // Ignore if userApiKeys is unavailable
     }
   }
+
+  // 1. Explicit key passed by the caller
+  if (options.apiKey && typeof options.apiKey === 'string') {
+    const savedProvider = userConf?.key === options.apiKey ? userConf.provider : null;
+    push(options.apiKey, options.provider || savedProvider, 'options');
+  }
+
+  // 2. Per-user key saved with `.aikey set`
+  if (userConf?.key) push(userConf.key, userConf.provider, 'personal');
 
   // 3. Global environment keys, respecting the configured provider priority
   for (const provider of providerPriority()) {
@@ -126,32 +133,63 @@ const aiKeyHealth = new Map(); // healthId -> { downUntil, lastError, lastOkAt, 
 function keyId(provider, key) {
   let hash = 0;
   for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) % 1000000007;
-  return `${provider === 'openrouter' ? 'or' : 'gm'}:${key.slice(0, 4)}…${String(hash).slice(-4)}`;
+  const prefix = { gemini: 'gm', openrouter: 'or', nvidia: 'nv', zai: 'za' }[provider] || 'ai';
+  return `${prefix}:${key.slice(0, 4)}…${String(hash).slice(-4)}`;
 }
 
 function providerLabel(provider) {
-  return provider === 'openrouter' ? 'OpenRouter' : 'Google Gemini';
+  return {
+    gemini: 'Google Gemini',
+    openrouter: 'OpenRouter',
+    nvidia: 'NVIDIA NIM',
+    zai: 'Z.AI'
+  }[provider] || 'Google Gemini';
 }
 
 function detectProviderFromKey(key) {
   const clean = String(key || '').trim();
+  if (/^nvapi-/i.test(clean)) return 'nvidia';
+  if (/^zai-/i.test(clean)) return 'zai';
   return clean.startsWith('sk-or-') || clean.startsWith('sk-') ? 'openrouter' : 'gemini';
 }
 
-/** Provider try-order (env AI_PROVIDER_PRIORITY=openrouter flips the default). */
+/** Provider try-order (AI_PROVIDER_PRIORITY can reorder any configured providers). */
 function providerPriority() {
-  const preferred = String(process.env.AI_PROVIDER_PRIORITY || 'gemini').toLowerCase();
-  return preferred.startsWith('open') ? ['openrouter', 'gemini'] : ['gemini', 'openrouter'];
+  const configured = String(process.env.AI_PROVIDER_PRIORITY || '')
+    .toLowerCase()
+    .split(/[\s,;]+/)
+    .filter((provider) => SUPPORTED_PROVIDERS.includes(provider));
+  return [...new Set([...configured, ...SUPPORTED_PROVIDERS])];
 }
 
 /** Read every key configured for a provider (several keys per variable are supported). */
 function collectProviderKeys(provider) {
-  const configKey = provider === 'openrouter'
-    ? config?.apiKeys?.openrouter
-    : (config?.apiKeys?.gemini || config?.apiKeys?.googleAi);
-  const raw = provider === 'openrouter'
-    ? [process.env.OPENROUTER_API_KEYS, process.env.OPENROUTER_API_KEY, configKey]
-    : [process.env.GEMINI_API_KEYS, process.env.GEMINI_API_KEY, process.env.GOOGLE_AI_API_KEY, configKey];
+  const sources = {
+    gemini: [
+      process.env.GEMINI_API_KEYS,
+      process.env.GEMINI_API_KEY,
+      process.env.GOOGLE_AI_API_KEY,
+      config?.apiKeys?.gemini || config?.apiKeys?.googleAi
+    ],
+    openrouter: [
+      process.env.OPENROUTER_API_KEYS,
+      process.env.OPENROUTER_API_KEY,
+      config?.apiKeys?.openrouter
+    ],
+    nvidia: [
+      process.env.NVIDIA_NIM_API_KEYS,
+      process.env.NVIDIA_NIM_API_KEY,
+      process.env.NVIDIA_API_KEY,
+      config?.apiKeys?.nvidia
+    ],
+    zai: [
+      process.env.ZAI_API_KEYS,
+      process.env.ZAI_API_KEY,
+      process.env.ZHIPUAI_API_KEY,
+      config?.apiKeys?.zai
+    ]
+  };
+  const raw = sources[provider] || [];
   return [...new Set(
     raw.filter(Boolean).join(',')
       .split(/[\s,;]+/)
@@ -239,6 +277,8 @@ function getAiHealth() {
     totalKeys: chain.length,
     geminiKeys: chain.filter((entry) => entry.provider === 'gemini').length,
     openrouterKeys: chain.filter((entry) => entry.provider === 'openrouter').length,
+    nvidiaKeys: chain.filter((entry) => entry.provider === 'nvidia').length,
+    zaiKeys: chain.filter((entry) => entry.provider === 'zai').length,
     priority: providerPriority(),
     entries,
   };
@@ -253,8 +293,16 @@ function isConfigured(userKey = null) {
     process.env.GOOGLE_AI_API_KEY ||
     process.env.OPENROUTER_API_KEY ||
     process.env.OPENROUTER_API_KEYS ||
+    process.env.NVIDIA_NIM_API_KEY ||
+    process.env.NVIDIA_NIM_API_KEYS ||
+    process.env.NVIDIA_API_KEY ||
+    process.env.ZAI_API_KEY ||
+    process.env.ZAI_API_KEYS ||
+    process.env.ZHIPUAI_API_KEY ||
     config?.apiKeys?.gemini ||
-    config?.apiKeys?.openrouter
+    config?.apiKeys?.openrouter ||
+    config?.apiKeys?.nvidia ||
+    config?.apiKeys?.zai
   );
 }
 
@@ -272,7 +320,13 @@ function getSetupMessage() {
     '1. Get an API key at: https://openrouter.ai/keys',
     '2. Send in private chat: `.aikey set YOUR_OPENROUTER_KEY`',
     '',
-    '💡 *For Bot Owners:* You can also add `GEMINI_API_KEY` or `OPENROUTER_API_KEY` to your deployment environment variables so AI works for all members.'
+    '🔹 *Option 3: NVIDIA NIM*',
+    'Get an API key at https://build.nvidia.com/ and set `NVIDIA_NIM_API_KEY` in your deployment environment.',
+    '',
+    '🔹 *Option 4: Z.AI*',
+    'Get an API key at https://z.ai/ and set `ZAI_API_KEY` in your deployment environment.',
+    '',
+    '💡 *For Bot Owners:* Configure multiple providers in your deployment environment and the bot will fail over automatically.'
   ].join('\n');
 }
 
@@ -519,6 +573,43 @@ async function generateOpenRouterContent(parts, apiKey, options = {}) {
   throw lastError || new Error(`Failed to generate response using OpenRouter models (${tried.join(', ')}).`);
 }
 
+async function generateCompatibleProviderContent(parts, apiKey, provider, options = {}) {
+  const settings = provider === 'nvidia'
+    ? {
+      baseUrl: process.env.NVIDIA_NIM_BASE_URL || 'https://integrate.api.nvidia.com/v1',
+      model: process.env.NVIDIA_NIM_MODEL || 'meta/llama-3.3-70b-instruct'
+    }
+    : {
+      baseUrl: process.env.ZAI_BASE_URL || 'https://api.z.ai/api/paas/v4',
+      model: process.env.ZAI_MODEL || 'glm-5.3'
+    };
+  const response = await axios.post(
+    `${settings.baseUrl.replace(/\/+$/, '')}/chat/completions`,
+    {
+      model: settings.model,
+      messages: formatOpenRouterMessages(parts),
+      temperature: options.temperature ?? 0.6,
+      max_tokens: options.maxOutputTokens ?? 750,
+      stream: false
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: getRequestTimeout(options, 90000)
+    }
+  );
+  const content = response.data?.choices?.[0]?.message?.content;
+  const text = Array.isArray(content)
+    ? content.map((part) => part.text || '').join('')
+    : content;
+  if (!text || typeof text !== 'string' || !text.trim()) {
+    throw new Error(`${providerLabel(provider)} returned an empty response.`);
+  }
+  return text.trim();
+}
+
 /**
  * Universal content generation function.
  * Seamlessly routes to Google Gemini or OpenRouter based on available key.
@@ -554,7 +645,9 @@ async function generateContent(parts, options = {}) {
     try {
       const text = entry.provider === 'openrouter'
         ? await generateOpenRouterContent(parts, entry.key, requestOptions)
-        : await generateGeminiContent(parts, entry.key, requestOptions);
+        : (entry.provider === 'nvidia' || entry.provider === 'zai')
+          ? await generateCompatibleProviderContent(parts, entry.key, entry.provider, requestOptions)
+          : await generateGeminiContent(parts, entry.key, requestOptions);
 
       markKeyOk(entry.healthId);
 

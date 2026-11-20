@@ -9,7 +9,15 @@ async function run() {
     'GOOGLE_AI_API_KEY',
     'OPENROUTER_API_KEY',
     'OPENROUTER_API_KEYS',
+    'NVIDIA_NIM_API_KEY',
+    'NVIDIA_NIM_API_KEYS',
+    'NVIDIA_API_KEY',
+    'ZAI_API_KEY',
+    'ZAI_API_KEYS',
+    'ZHIPUAI_API_KEY',
     'OPENAI_API_KEY',
+    'AI_PROVIDER_PRIORITY',
+    'TRANSCRIPTION_PROVIDER_PRIORITY',
     'OPENWEATHER_API_KEY',
     'REMOVEBG_KEY',
     'YOUTUBE_API_KEY',
@@ -26,7 +34,9 @@ async function run() {
     'test-openrouter-secret',
     'test-openai-secret',
     'test-weather-secret',
-    'test-removebg-secret'
+    'test-removebg-secret',
+    'test-nvidia-nim-secret',
+    'test-zai-secret'
   ];
 
   try {
@@ -35,6 +45,10 @@ async function run() {
     process.env.GOOGLE_AI_API_KEY = secrets[0];
     process.env.OPENROUTER_API_KEY = secrets[1];
     process.env.OPENAI_API_KEY = secrets[2];
+    process.env.NVIDIA_NIM_API_KEY = secrets[5];
+    process.env.NVIDIA_API_KEY = secrets[5];
+    process.env.ZAI_API_KEY = secrets[6];
+    process.env.AI_PROVIDER_PRIORITY = 'nvidia,zai,gemini';
     process.env.OPENWEATHER_API_KEY = secrets[3];
     process.env.REMOVEBG_KEY = secrets[4];
     process.env.YOUTUBE_API_KEY = 'shared-youtube-client-key';
@@ -53,10 +67,12 @@ async function run() {
     });
 
     assert.equal(command.ownerOnly, true);
-    assert.equal(requests.length, 5);
+    assert.equal(requests.length, 7);
     assert.match(responseText, /GEMINI_API_KEY: ✅ working/);
     assert.match(responseText, /GOOGLE_AI_API_KEY: ✅ working/);
     assert.match(responseText, /OPENROUTER_API_KEY: ✅ working/);
+    assert.match(responseText, /NVIDIA_NIM_API_KEY: ✅ working/);
+    assert.match(responseText, /ZAI_API_KEY: ✅ working/);
     assert.match(responseText, /OPENAI_API_KEY: ✅ working/);
     assert.match(responseText, /OPENWEATHER_API_KEY: ✅ working/);
     assert.match(responseText, /REMOVEBG_KEY: ✅ working/);

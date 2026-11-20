@@ -25,6 +25,7 @@ const ytDlp = require('yt-dlp-exec');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36';
 const HTTP = axios.create({
@@ -37,8 +38,8 @@ const HTTP = axios.create({
 const URL_PATTERNS = {
   youtube: /(?:youtube\.com\/(?:watch|shorts|live)|youtu\.be\/|youtube\.com\/embed\/)/i,
   tiktok: /(?:tiktok\.com\/|vt\.tiktok\.com\/|douyin\.com\/)/i,
-  instagram: /instagram\.com\/(?:p|reel|reels|tv)\//i,
-  facebook: /(?:facebook\.com\/(?:watch|reel|.*\/videos\/|.*\/reel\/)|fb\.watch\/|fb\.com\/)/i,
+  instagram: /^(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:(?:p|reel|reels|tv)\/|share\/(?:p|reel|reels)\/)/i,
+  facebook: /^(?:https?:\/\/)?(?:(?:www|m|web|mbasic)\.)?facebook\.com\/(?:watch|reel|.*\/videos\/|.*\/reel\/|share\/|photo(?:\.php)?|photos\/|posts\/|permalink\.php|story\.php)|^(?:https?:\/\/)?(?:www\.)?(?:fb\.watch|fb\.com)\//i,
   twitter: /(?:twitter\.com|x\.com)\//i,
   spotify: /open\.spotify\.com\/(?:intl-[a-z]{2}\/)?(track|album|playlist|episode)\//i,
   soundcloud: /soundcloud\.com\//i,
@@ -287,6 +288,67 @@ async function ytDlpInfo(url, extraFlags = {}) {
     'remote-components': 'ejs:github',
     ...extraFlags
   });
+}
+
+async function ytDlpSocialDownload(url) {
+  let parsed;
+  try {
+    parsed = new URL(String(url || '').trim());
+  } catch {
+    throw new Error('Enter a valid Instagram or Facebook link.');
+  }
+  const host = parsed.hostname.toLowerCase();
+  const isInstagram = host === 'instagram.com' || host.endsWith('.instagram.com');
+  const isFacebook = host === 'facebook.com' || host.endsWith('.facebook.com') ||
+    host === 'fb.com' || host.endsWith('.fb.com') || host === 'fb.watch';
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || (!isInstagram && !isFacebook)) {
+    throw new Error('Only public Instagram or Facebook links are supported.');
+  }
+
+  const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'poltergeist-social-'));
+  try {
+    const output = path.join(tempDir, 'media.%(ext)s');
+    await ytDlp.exec(parsed.href, {
+      format: 'best',
+      output,
+      'no-playlist': true,
+      'max-filesize': '45M',
+      'no-warnings': true,
+      'no-progress': true,
+      'socket-timeout': 20,
+      retries: 1,
+      'extractor-retries': 1,
+      'fragment-retries': 1
+    }, { timeout: 90000 });
+
+    const filename = (await fs.promises.readdir(tempDir)).find((name) => !name.endsWith('.part'));
+    if (!filename) throw new Error('yt-dlp did not produce a media file.');
+    const filepath = path.join(tempDir, filename);
+    const stats = await fs.promises.stat(filepath);
+    if (!stats.isFile() || stats.size === 0) throw new Error('The downloaded media file is empty.');
+    if (stats.size > 45 * 1024 * 1024) throw new Error('Media must be 45 MB or smaller.');
+
+    const extension = path.extname(filename).toLowerCase();
+    const mimeTypes = {
+      '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime',
+      '.webm': 'video/webm', '.mkv': 'video/x-matroska',
+      '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+      '.gif': 'image/gif', '.webp': 'image/webp', '.avif': 'image/avif'
+    };
+    const mimeType = mimeTypes[extension];
+    if (!mimeType) throw new Error(`yt-dlp returned an unsupported media type: ${extension || 'unknown'}.`);
+    return {
+      buffer: await fs.promises.readFile(filepath),
+      mimeType,
+      filename: `${isInstagram ? 'instagram' : 'facebook'}_media${extension}`,
+      source: parsed.href
+    };
+  } catch (error) {
+    if (error.timedOut) throw new Error('yt-dlp timed out while resolving that public post.');
+    throw new Error(`yt-dlp could not download that public post: ${error.message}`);
+  } finally {
+    await fs.promises.rm(tempDir, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -807,6 +869,10 @@ async function apkSearch(query) {
 
 async function instagramDownload(url) {
   const target = String(url || '').trim();
+  const parsed = new URL(target);
+  if (!['instagram.com'].some((domain) => parsed.hostname.toLowerCase() === domain || parsed.hostname.toLowerCase().endsWith(`.${domain}`))) {
+    throw new Error('That does not look like an Instagram post link.');
+  }
   const meta = { title: null, author: null, thumbnail: null };
 
   // oEmbed is keyless and works for public posts; gives metadata + preview image.
@@ -839,11 +905,13 @@ async function instagramDownload(url) {
   // Public post page — og tags for photos, sometimes videos.
   let videoUrl = null;
   let imageUrl = meta.thumbnail;
+  let videoPost = /instagram\.com\/(?:reel|reels|tv)\//i.test(target);
   try {
     const page = await HTTP.get(target, { maxRedirects: 5 });
     const html = String(page.data || '');
     videoUrl = findVideo(html);
-    imageUrl = imageUrl || findImage(html);
+    videoPost = Boolean(videoUrl) || /video/i.test(metaTagValue(html, 'og:type') || '');
+    if (!videoPost) imageUrl = imageUrl || findImage(html);
   } catch { /* best effort */ }
 
   // Embed page — served without the login wall; the most reliable video source.
@@ -857,6 +925,7 @@ async function instagramDownload(url) {
     }
   }
 
+  if (videoPost) imageUrl = null;
   if (!videoUrl && !imageUrl) {
     throw new Error('That Instagram post could not be found — it may be private or deleted.');
   }
@@ -873,6 +942,12 @@ async function instagramDownload(url) {
 
 async function facebookDownload(url) {
   let target = String(url || '').trim();
+  const parsed = new URL(target);
+  const host = parsed.hostname.toLowerCase();
+  if (!(host === 'facebook.com' || host.endsWith('.facebook.com') || host === 'fb.com' ||
+    host.endsWith('.fb.com') || host === 'fb.watch')) {
+    throw new Error('That does not look like a Facebook post link.');
+  }
 
   // fb.watch short links: follow the redirect to the real facebook.com URL.
   if (/fb\.watch\//i.test(target)) {
@@ -882,21 +957,27 @@ async function facebookDownload(url) {
       if (/facebook\.com\//i.test(finalUrl)) target = finalUrl;
     } catch { /* keep the original and hope the plugin page resolves it */ }
   }
-  target = target.split('?')[0];
+  let pageHtml = '';
+  try {
+    const page = await HTTP.get(target, { maxRedirects: 5, timeout: 15000 });
+    pageHtml = String(page.data || '');
+  } catch { /* the video plugin may still resolve it */ }
 
-  // The video plugin renders without a login wall and embeds direct fbcdn mp4 URLs.
+  // The video plugin can expose direct fbcdn mp4 URLs for public videos.
   const pluginUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(target)}&show_text=false&width=560`;
-  const response = await HTTP.get(pluginUrl, { maxRedirects: 5 });
-  const html = String(response.data || '')
+  let pluginHtml = '';
+  try {
+    const response = await HTTP.get(pluginUrl, { maxRedirects: 5, timeout: 15000 });
+    pluginHtml = String(response.data || '');
+  } catch { /* continue with the post page metadata */ }
+  const unescapeHtml = (value) => String(value || '')
     .replace(/\\u0025/g, '%')
     .replace(/\\\//g, '/')
     .replace(/&amp;/g, '&');
+  const html = unescapeHtml(`${pageHtml}\n${pluginHtml}`);
   const candidates = [...new Set(
     [...html.matchAll(/https:\/\/[^"'\s\\]+?\.mp4[^"'\s\\]*/g)].map((match) => match[0])
   )];
-  if (!candidates.length) {
-    throw new Error('No downloadable video found for that Facebook link — it may be private or unavailable.');
-  }
 
   // Prefer HD renditions (hd path segment or the highest mobile encoding).
   const ranked = candidates
@@ -920,7 +1001,14 @@ async function facebookDownload(url) {
       }
     } catch { /* try the next rendition */ }
   }
-  throw new Error('Facebook returned a video link that could not be fetched.');
+  const imageUrl = metaTagValue(html, 'og:image') || metaTagValue(html, 'twitter:image');
+  const videoPost = Boolean(
+    metaTagValue(html, 'og:video') ||
+    /video/i.test(metaTagValue(html, 'og:type') || '') ||
+    /\/(?:watch|reel|videos?)(?:\/|$)|\/share\/[vr](?:\/|$)/i.test(new URL(target).pathname)
+  );
+  if (imageUrl && !videoPost) return { imageUrl: unescapeHtml(imageUrl), source: target };
+  throw new Error('No public photo or video media was found for that Facebook link — it may be private or unavailable.');
 }
 
 /* ------------------------------- Twitter/X ----------------------------- */
@@ -1045,6 +1133,7 @@ module.exports = {
   youtubeVideo,
   youtubeDlAudio,
   youtubeDlVideo,
+  ytDlpSocialDownload,
   tiktokDownload,
   instagramDownload,
   facebookDownload,

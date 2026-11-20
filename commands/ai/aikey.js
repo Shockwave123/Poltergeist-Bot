@@ -1,9 +1,9 @@
 /**
  * AI Key Management Command
- * Allows users to set, test, or remove their personal Google Gemini or OpenRouter API key.
+ * Allows users to set, test, or remove their personal AI provider API key.
  */
 
-const { isConfigured, getSetupMessage, testAiKey, resolveAiCredentials, getAiHealth } = require('../../utils/googleAi');
+const { isConfigured, getSetupMessage, testAiKey, resolveAiCredentials, getAiHealth, providerLabel: getProviderLabel } = require('../../utils/googleAi');
 const { getUserAiConfig, setKey, removeKey, detectProvider } = require('../../utils/userApiKeys');
 
 /** Human readable failover / key-health block used by the status card. */
@@ -13,7 +13,7 @@ const buildHealthBlock = (prefix) => {
     return [
       '├─『 ⚠️ *FAILOVER* 』──',
       '│ No global keys configured yet.',
-      '│ Add GEMINI_API_KEY and/or OPENROUTER_API_KEY so the bot',
+      '│ Add Gemini, OpenRouter, NVIDIA NIM and/or Z.AI keys so the bot',
       '│ can switch providers automatically when one is offline.',
       '│'
     ].join('\n');
@@ -22,7 +22,7 @@ const buildHealthBlock = (prefix) => {
   const lines = [
     '├─『 🔁 *FAILOVER STATUS* 』──',
     `│ Priority: *${health.priority.join(' → ')}*`,
-    `│ Keys: ${health.geminiKeys} Gemini, ${health.openrouterKeys} OpenRouter`,
+    `│ Keys: ${health.geminiKeys} Gemini, ${health.openrouterKeys} OpenRouter, ${health.nvidiaKeys} NVIDIA NIM, ${health.zaiKeys} Z.AI`,
   ];
 
   health.entries.forEach((entry) => {
@@ -37,7 +37,7 @@ const buildHealthBlock = (prefix) => {
     }
   });
 
-  lines.push('│ Gemini and OpenRouter cover for each other automatically.');
+  lines.push('│ Configured providers cover for each other automatically.');
   lines.push('│');
   return lines.join('\n');
 };
@@ -46,7 +46,7 @@ module.exports = {
   name: 'aikey',
   aliases: ['aiconfig', 'setkey', 'aistatus'],
   category: 'ai',
-  description: 'Manage your personal Google Gemini or OpenRouter API key',
+  description: 'Manage your personal AI provider API key',
   usage: '.aikey | .aikey set <key> | .aikey test | .aikey status | .aikey remove',
 
   async execute(sock, msg, args, extra) {
@@ -73,6 +73,12 @@ module.exports = {
       } else if (['openrouter', 'or'].includes(keyInput?.toLowerCase())) {
         forcedProvider = 'openrouter';
         keyInput = args[2]?.trim();
+      } else if (['nvidia', 'nim'].includes(keyInput?.toLowerCase())) {
+        forcedProvider = 'nvidia';
+        keyInput = args[2]?.trim();
+      } else if (['zai', 'z.ai', 'zhipu'].includes(keyInput?.toLowerCase())) {
+        forcedProvider = 'zai';
+        keyInput = args[2]?.trim();
       }
 
       if (!keyInput) {
@@ -91,15 +97,15 @@ module.exports = {
       }
 
       const detected = forcedProvider || detectProvider(keyInput);
-      const providerLabel = detected === 'openrouter' ? 'OpenRouter' : 'Google Gemini';
+      const detectedProviderLabel = getProviderLabel(detected);
 
-      await extra.reply('⏳ Validating and testing your ' + providerLabel + ' key... Please wait.');
+      await extra.reply('⏳ Validating and testing your ' + detectedProviderLabel + ' key... Please wait.');
 
       const testResult = await testAiKey(keyInput, detected);
       if (!testResult.ok) {
         return extra.reply(
           '❌ *Key Verification Failed!*\n\n' +
-          'Provider: *' + providerLabel + '*\n' +
+          'Provider: *' + detectedProviderLabel + '*\n' +
           'Reason: ' + testResult.message + '\n\n' +
           'Please ensure the key is active and has available quota, then try again.'
         );
@@ -110,7 +116,7 @@ module.exports = {
         try { await sock.sendMessage(extra.from, { delete: msg.key }); } catch {}
         return extra.reply(
           '✅ *API Key Saved Successfully!*\n\n' +
-          '• *Provider:* ' + providerLabel + '\n' +
+          '• *Provider:* ' + detectedProviderLabel + '\n' +
           '• *Encryption:* AES-256-GCM\n' +
           '• *Status:* Verified & Active\n\n' +
           'You can now use all AI features seamlessly: `' + (extra.prefix || '.') + 'ai`, `' + (extra.prefix || '.') + 'deepread`, and group chat features!'
@@ -133,7 +139,7 @@ module.exports = {
         return extra.reply('❌ No active AI key found! Use `' + (extra.prefix || '.') + 'aikey set <key>` to configure one.');
       }
 
-      const providerName = active.provider === 'openrouter' ? 'OpenRouter' : 'Google Gemini';
+      const providerName = getProviderLabel(active.provider);
       await extra.reply('⏳ Testing connection with ' + providerName + ' (' + active.source + ' key)...');
 
       const res = await testAiKey(active.key, active.provider);
@@ -150,12 +156,12 @@ module.exports = {
 
     let personalStatus = '❌ None saved';
     if (personalConf && personalConf.key) {
-      const pName = personalConf.provider === 'openrouter' ? 'OpenRouter' : 'Google Gemini';
+      const pName = getProviderLabel(personalConf.provider);
       personalStatus = '✅ ' + pName + ' (Personal)';
     }
 
     const globalStatus = hasGlobal
-      ? `✅ ${health.geminiKeys} Gemini + ${health.openrouterKeys} OpenRouter key(s)`
+      ? `✅ ${health.geminiKeys} Gemini + ${health.openrouterKeys} OpenRouter + ${health.nvidiaKeys} NVIDIA NIM + ${health.zaiKeys} Z.AI key(s)`
       : '❌ None';
     const overallReady = Boolean(personalConf?.key || hasGlobal);
 
@@ -178,6 +184,14 @@ module.exports = {
       '│ 1. Open: https://openrouter.ai/keys',
       '│ 2. Create and copy your key',
       '│ 3. Send in DM: `' + (extra.prefix || '.') + 'aikey set YOUR_KEY`',
+      '│',
+      '│ 🔹 *Option 3: NVIDIA NIM*',
+      '│ 1. Open: https://build.nvidia.com/',
+      '│ 2. Create an API key and send: `' + (extra.prefix || '.') + 'aikey set nvidia YOUR_KEY`',
+      '│',
+      '│ 🔹 *Option 4: Z.AI*',
+      '│ 1. Open: https://z.ai/',
+      '│ 2. Create an API key and send: `' + (extra.prefix || '.') + 'aikey set zai YOUR_KEY`',
       '│',
       '├─『 ⚙️ *COMMANDS* 』──',
       '│ • `' + (extra.prefix || '.') + 'aikey set <key>` : Save your key',

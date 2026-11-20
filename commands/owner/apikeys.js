@@ -15,6 +15,18 @@ const PROVIDER_TESTS = {
   openrouter: async (key) => request('https://openrouter.ai/api/v1/key', {
     headers: { Authorization: `Bearer ${key}` }
   }),
+  nvidia: async (key) => request('https://integrate.api.nvidia.com/v1/models', {
+    headers: { Authorization: `Bearer ${key}` }
+  }),
+  zai: async (key) => request('https://api.z.ai/api/paas/v4/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: process.env.ZAI_MODEL || 'glm-5.3',
+      messages: [{ role: 'user', content: 'Reply with OK.' }],
+      max_tokens: 4
+    })
+  }),
   openai: async (key) => request('https://api.openai.com/v1/models', {
     headers: { Authorization: `Bearer ${key}` }
   }),
@@ -33,6 +45,12 @@ const ENV_KEY_GROUPS = [
   { name: 'GOOGLE_AI_API_KEY', provider: 'gemini' },
   { name: 'OPENROUTER_API_KEY', provider: 'openrouter' },
   { name: 'OPENROUTER_API_KEYS', provider: 'openrouter' },
+  { name: 'NVIDIA_NIM_API_KEY', provider: 'nvidia' },
+  { name: 'NVIDIA_NIM_API_KEYS', provider: 'nvidia' },
+  { name: 'NVIDIA_API_KEY', provider: 'nvidia' },
+  { name: 'ZAI_API_KEY', provider: 'zai' },
+  { name: 'ZAI_API_KEYS', provider: 'zai' },
+  { name: 'ZHIPUAI_API_KEY', provider: 'zai' },
   { name: 'OPENAI_API_KEY', provider: 'openai' },
   { name: 'OPENWEATHER_API_KEY', provider: 'openweather' },
   { name: 'REMOVEBG_KEY', provider: 'removebg' }
@@ -45,7 +63,9 @@ const UNTESTED_ENV_KEY_NAMES = [
   'YOUTUBE_API_KEY_IOS',
   'YOUTUBE_API_KEY_TV',
   'NEWS_API_KEY',
-  'AUDD_API_KEY'
+  'AUDD_API_KEY',
+  'AI_PROVIDER_PRIORITY',
+  'TRANSCRIPTION_PROVIDER_PRIORITY'
 ];
 
 const EMBEDDED_KEY_INVENTORY = [

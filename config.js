@@ -81,14 +81,17 @@ module.exports = {
       detect: false,
       chatbot: false,
       chatbotVoice: false,
+      chatbotPersonality: 'default',
       autosticker: false // Auto-convert images/videos to stickers
     },
     
     // API Keys (add your own)
     apiKeys: {
       gemini: process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '',
-    openrouter: process.env.OPENROUTER_API_KEY || '',
-    openai: process.env.OPENAI_API_KEY || '',
+      openrouter: process.env.OPENROUTER_API_KEY || '',
+      nvidia: process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY || '',
+      zai: process.env.ZAI_API_KEY || process.env.ZHIPUAI_API_KEY || '',
+      openai: process.env.OPENAI_API_KEY || '',
       deepai: '',
       remove_bg: ''
     },

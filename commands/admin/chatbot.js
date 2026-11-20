@@ -17,6 +17,62 @@ const MAX_CONTEXT_MESSAGES = 20;
 const MAX_CHAT_MEMORY_ENTRIES = 200;
 const MAX_USER_INFO_ENTRIES = 500;
 const EMOJI_PATTERN = '[\\u{1F300}-\\u{1FAFF}\\u2600-\\u27BF]';
+const PERSONALITIES = [
+  { id: 'default', name: 'Default', prompt: '' },
+  {
+    id: 'nonchalant',
+    name: 'The Nonchalant Friend',
+    prompt: 'Be an unbothered, dry, low-energy friend who speaks in short lowercase bursts. Never panic or overreact; downplay ordinary drama while still offering surprisingly solid advice.'
+  },
+  {
+    id: 'double-minded',
+    name: 'The Double-Minded Friend',
+    prompt: 'Be indecisive and visibly consider multiple sides, occasionally changing your mind in a playful, natural way. Ask “but what if?” when it fits, but still help the user reach a useful conclusion.'
+  },
+  {
+    id: 'overthinker',
+    name: 'The Overthinker',
+    prompt: 'Be an overthinker who notices tiny details and imagines multiple possible outcomes. Keep spirals playful and brief; do not present anxious speculation as fact or intensify a user’s real distress.'
+  },
+  {
+    id: 'devils-advocate',
+    name: 'The Devil’s Advocate',
+    prompt: 'Be a playful contrarian who tests the user’s reasoning with another perspective. You can say “hear me out though” or “playing devil’s advocate,” but stay constructive and concede when their point is stronger.'
+  },
+  {
+    id: 'chaotic-enabler',
+    name: 'The Chaotic Enabler',
+    prompt: 'Be impulsive and hype-first about harmless, low-stakes choices. For consequential, dangerous, or illegal decisions, do not encourage recklessness; make the safer choice sound appealing instead.'
+  },
+  {
+    id: 'brutally-honest',
+    name: 'The Brutally Honest Friend',
+    prompt: 'Be a blunt, zero-filter truth-teller who calls out excuses with care. Be direct without cruelty, insults, or shaming; offer an actionable next step.'
+  },
+  {
+    id: 'nostalgic',
+    name: 'The Nostalgic Friend',
+    prompt: 'Be sentimental and reflective, sometimes comparing the moment to “back in the day.” Turn small moments into warm life reflections, but do not invent shared memories.'
+  },
+  {
+    id: 'conspiracy-theorist',
+    name: 'The Conspiracy Theorist',
+    prompt: 'Use a suspicious, dramatic, playful tone and side-eye coincidences with phrases like “wake up” or “who benefits?” Keep conspiratorial takes clearly humorous or speculative; do not assert unsupported claims as facts.'
+  },
+  {
+    id: 'procrastinator',
+    name: 'The Chronic Procrastinator',
+    prompt: 'Be a relatable last-minute hustler who jokes “we still have time” and understands deadline pressure. Help the user make a realistic plan rather than undermining urgent responsibilities.'
+  },
+  {
+    id: 'secretly-soft-cynic',
+    name: 'The Secretly Soft Cynic',
+    prompt: 'Pretend to be jaded, sarcastic, and tired of everyone, while quietly showing genuine care through thoughtful help. Complain lightly, but never dismiss the user’s feelings.'
+  }
+];
+const PERSONALITY_BY_ID = new Map(PERSONALITIES.map((personality) => [personality.id, personality]));
+const personalityCycleIndices = new Map();
+const MAX_PERSONALITY_CYCLE_ENTRIES = 500;
 
 function getMemoryValue(map, key) {
   const value = map.get(key);
@@ -33,6 +89,42 @@ function setMemoryValue(map, key, value, limit) {
   while (map.size > limit) {
     map.delete(map.keys().next().value);
   }
+}
+
+function normalizePersonalityInput(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function findPersonality(value) {
+  const normalized = normalizePersonalityInput(value);
+  if (!normalized) return null;
+  if (PERSONALITY_BY_ID.has(normalized.replace(/\s+/g, '-'))) {
+    return PERSONALITY_BY_ID.get(normalized.replace(/\s+/g, '-'));
+  }
+  const withoutArticle = normalized.replace(/^the\s+/, '');
+  return PERSONALITIES.find((personality) =>
+    normalizePersonalityInput(personality.name).replace(/^the\s+/, '') === withoutArticle
+  ) || null;
+}
+
+function resolvePersonality(chatId, selection = 'default') {
+  if (selection !== 'cycle') {
+    return PERSONALITY_BY_ID.get(selection) || PERSONALITY_BY_ID.get('default');
+  }
+  const previousIndex = personalityCycleIndices.get(chatId) || 0;
+  const personality = PERSONALITIES[previousIndex];
+  setMemoryValue(
+    personalityCycleIndices,
+    chatId,
+    (previousIndex + 1) % PERSONALITIES.length,
+    MAX_PERSONALITY_CYCLE_ENTRIES
+  );
+  return personality;
+}
+
+function getConfiguredPersonality(chatId) {
+  if (!chatId.endsWith('@g.us')) return 'default';
+  return database.getGroupSettings(chatId).chatbotPersonality || 'default';
 }
 
 function getTypingDelay(charCount) {
@@ -151,9 +243,11 @@ async function getAIResponse(userMessage, userContext) {
   const historyLimit = userContext.historyLimit || MAX_CONTEXT_MESSAGES;
   const history = formatConversationHistory(userContext.messages, historyLimit);
   const info = JSON.stringify(userContext.userInfo);
+  const personality = userContext.personality || PERSONALITY_BY_ID.get('default');
 
   const prompt = [
     `You are ${config.botName}, a friendly participant in a WhatsApp chat.`,
+    personality.prompt ? `Personality: ${personality.prompt}` : '',
     'Reply in 1-2 short lines only. Match the user\'s language and vibe: Hinglish, Hindi, English, or whatever they use.',
     'Sound like a relaxed friend in a WhatsApp chat. Match the user\'s language, message length, punctuation, and energy. Use contractions and natural pauses, but do not copy their wording or imitate harmful behavior.',
     'Do NOT use emojis unless the user uses them first. Plain text replies are preferred.',
@@ -214,12 +308,14 @@ async function handleChat(sock, msg, text, senderId, options = {}) {
     messages.push({ role: 'user', text: cleanedMessage });
     if (messages.length > MAX_CONTEXT_MESSAGES) messages.shift();
 
+    const personality = resolvePersonality(chatId, getConfiguredPersonality(chatId));
     await sock.sendPresenceUpdate('composing', chatId);
 
     const response = await getAIResponse(cleanedMessage, {
       messages,
       userInfo: getMemoryValue(chatMemory.userInfo, senderId),
-      apiKey: getKey(senderId)
+      apiKey: getKey(senderId),
+      personality
     });
 
     await showTyping(sock, chatId, getTypingDelay(response.length));
@@ -261,12 +357,14 @@ async function handleContinuousChat(sock, msg, text, chatId) {
   messages.push({ role: 'user', text: text.trim() });
   if (messages.length > MAX_CONTEXT_MESSAGES) messages.shift();
 
+  const personality = resolvePersonality(chatId, getConfiguredPersonality(chatId));
   await sock.sendPresenceUpdate('composing', chatId);
   const response = await getAIResponse(text.trim(), {
     messages,
     userInfo: getMemoryValue(chatMemory.userInfo, memoryKey),
     historyLimit: 10,
     fast: true,
+    personality
   });
   await sock.sendMessage(chatId, { text: response });
   messages.push({ role: 'assistant', text: response });
@@ -279,7 +377,7 @@ module.exports = {
   aliases: ['cb'],
   category: 'admin',
   description: 'AI chatbot — tag bot or reply to chat',
-  usage: '.chatbot [on|off]',
+  usage: '.chatbot [on|off|voice|personality]',
   groupOnly: true,
   adminOnly: true,
 
@@ -293,10 +391,14 @@ module.exports = {
     const chatId = extra.from;
 
     if (!match) {
-      const enabled = database.getGroupSettings(chatId).chatbot;
+      const settings = database.getGroupSettings(chatId);
+      const enabled = settings.chatbot;
+      const personality = settings.chatbotPersonality === 'cycle'
+        ? 'Automatic cycle'
+        : (PERSONALITY_BY_ID.get(settings.chatbotPersonality || 'default') || PERSONALITY_BY_ID.get('default')).name;
       await showTyping(sock, chatId);
       return extra.reply(
-        `*CHATBOT SETUP*\n\nStatus: ${enabled ? '✅ On' : '❌ Off'}\nVoice replies: ${database.getGroupSettings(chatId).chatbotVoice ? '✅ On' : '❌ Off'}\n\n*.chatbot on* — Enable chatbot\n*.chatbot off* — Disable chatbot\n*.chatbot voice on* — Use voice replies\n*.chatbot voice off* — Use text replies\n\n@tag bot or reply to chat!`
+        `*CHATBOT SETUP*\n\nStatus: ${enabled ? '✅ On' : '❌ Off'}\nVoice replies: ${settings.chatbotVoice ? '✅ On' : '❌ Off'}\nPersonality: ${personality}\n\n*.chatbot on* — Enable chatbot\n*.chatbot off* — Disable chatbot\n*.chatbot voice on/off* — Toggle voice replies\n*.chatbot personality cycle* — Cycle through all 11 personalities\n*.chatbot personality default* — Use the default personality\n*.chatbot personality <name>* — Choose a personality\n\nAvailable: ${PERSONALITIES.slice(1).map(({ name }) => name.replace(/^The /, '')).join(', ')}\n\n@tag bot or reply to chat!`
       );
     }
 
@@ -311,6 +413,29 @@ module.exports = {
       }
       database.updateGroupSettings(chatId, { chatbotVoice: voiceOption === 'on' });
       return extra.reply(`*Chatbot voice replies ${voiceOption === 'on' ? 'enabled' : 'disabled'}.*`);
+    }
+
+    if (match === 'personality') {
+      const requested = args.slice(1).join(' ').trim();
+      const normalized = normalizePersonalityInput(requested);
+      if (normalized === 'cycle' || normalized === 'auto' || normalized === 'automatic') {
+        database.updateGroupSettings(chatId, { chatbotPersonality: 'cycle' });
+        personalityCycleIndices.delete(chatId);
+        return extra.reply('*Chatbot personality set to automatic cycle through all 11 personalities.*');
+      }
+
+      const selected = findPersonality(requested)
+        || (['default bot', 'default personality', 'bot default'].includes(normalized)
+          ? PERSONALITY_BY_ID.get('default')
+          : null);
+      if (!selected) {
+        return extra.reply(
+          `*Usage: .chatbot personality cycle | default | <name>*\nAvailable: ${PERSONALITIES.map(({ name }) => name).join(', ')}`
+        );
+      }
+      database.updateGroupSettings(chatId, { chatbotPersonality: selected.id });
+      personalityCycleIndices.delete(chatId);
+      return extra.reply(`*Chatbot personality set to ${selected.name}.*`);
     }
 
     if (match === 'on') {
@@ -329,6 +454,6 @@ module.exports = {
       return extra.reply('*Chatbot disabled for this group*');
     }
 
-    return extra.reply('*Invalid command. Use .chatbot on or .chatbot off*');
+    return extra.reply('*Invalid command. Use .chatbot on/off, voice on/off, or personality <name|cycle|default>.*');
   }
 };

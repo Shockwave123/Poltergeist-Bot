@@ -23,6 +23,10 @@ services:
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
+      - key: NVIDIA_NIM_API_KEY
+        sync: false
+      - key: ZAI_API_KEY
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENWEATHER_API_KEY

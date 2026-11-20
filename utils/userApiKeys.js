@@ -54,6 +54,8 @@ function decrypt(value) {
 function detectProvider(key) {
   if (!key || typeof key !== 'string') return 'gemini';
   const cleanKey = key.trim();
+  if (/^nvapi-/i.test(cleanKey)) return 'nvidia';
+  if (/^zai-/i.test(cleanKey)) return 'zai';
   if (cleanKey.startsWith('sk-or-') || cleanKey.startsWith('sk-')) {
     return 'openrouter';
   }
