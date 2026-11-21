@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const viewOnce = require('../commands/general/viewonce');
+const messageStore = require('../utils/messageStore');
 
 const image = {
   imageMessage: {
@@ -53,8 +54,39 @@ async function testDownloadUsesReuploadCallback() {
   assert.equal(downloadArguments[3].reuploadRequest, updateMediaMessage);
 }
 
-testDownloadUsesReuploadCallback()
-  .then(() => console.log('View-once parsing, download recovery, and alias tests passed.'))
+async function testQuotedTargetPrefersCachedOriginal() {
+  const cachedMessage = {
+    key: { remoteJid: 'chat@g.us', id: 'quoted-id', participant: 'sender@s.whatsapp.net' },
+    message: { viewOnceMessageV2: { message: image } }
+  };
+  const contextInfo = {
+    stanzaId: 'quoted-id',
+    participant: 'sender@s.whatsapp.net',
+    quotedMessage: { imageMessage: { viewOnce: true } }
+  };
+
+  messageStore.messages.clear();
+  messageStore.add(cachedMessage);
+  assert.equal(
+    await viewOnce.getQuotedTargetMessage('chat@g.us', contextInfo),
+    cachedMessage
+  );
+  assert.deepEqual(
+    viewOnce.getViewOnceMedia(
+      (await viewOnce.getQuotedTargetMessage('chat@g.us', contextInfo)).message
+    ),
+    { messageType: 'imageMessage', message: image }
+  );
+
+  messageStore.messages.clear();
+  const fallback = await viewOnce.getQuotedTargetMessage('chat@g.us', contextInfo);
+  assert.equal(fallback.key.id, 'quoted-id');
+  assert.equal(fallback.key.participant, 'sender@s.whatsapp.net');
+  assert.equal(fallback.message, contextInfo.quotedMessage);
+}
+
+Promise.all([testDownloadUsesReuploadCallback(), testQuotedTargetPrefersCachedOriginal()])
+  .then(() => console.log('View-once parsing, cached-message recovery, and alias tests passed.'))
   .catch((error) => {
     console.error(error);
     process.exitCode = 1;

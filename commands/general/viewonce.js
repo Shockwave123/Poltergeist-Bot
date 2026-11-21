@@ -5,6 +5,7 @@
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const config = require('../../config');
 const { normalizeJidWithLid } = require('../../utils/jidHelper');
+const messageStore = require('../../utils/messageStore');
 
 const MEDIA_TYPES = ['imageMessage', 'videoMessage', 'audioMessage'];
 
@@ -33,6 +34,20 @@ function getViewOnceMedia(quotedMessage) {
     : null;
 }
 
+async function getQuotedTargetMessage(chatId, contextInfo) {
+  const cachedMessage = await messageStore.loadMessage(chatId, contextInfo.stanzaId);
+  if (cachedMessage) return cachedMessage;
+
+  return {
+    key: {
+      remoteJid: chatId,
+      id: contextInfo.stanzaId,
+      participant: contextInfo.participant
+    },
+    message: contextInfo.quotedMessage
+  };
+}
+
 async function downloadViewOnceMedia(sock, targetMessage, downloader = downloadMediaMessage) {
   return downloader(
     targetMessage,
@@ -49,6 +64,7 @@ module.exports = {
   description: 'Reveal view-once messages and forward them to owner DM',
   usage: '.viewonce (reply to view-once message)',
   getViewOnceMedia,
+  getQuotedTargetMessage,
   downloadViewOnceMedia,
   
   async execute(sock, msg, args) {
@@ -71,7 +87,8 @@ module.exports = {
         );
       }
 
-      const mediaInfo = getViewOnceMedia(ctx.quotedMessage);
+      const targetMessage = await getQuotedTargetMessage(chatId, ctx);
+      const mediaInfo = getViewOnceMedia(targetMessage.message);
       if (!mediaInfo) {
         return await sock.sendMessage(
           chatId,
@@ -82,14 +99,6 @@ module.exports = {
 
       const { messageType: mtype, message: actualMsg } = mediaInfo;
       const mediaMessage = actualMsg[mtype];
-      const targetMessage = {
-        key: {
-          remoteJid: chatId,
-          id: ctx.stanzaId,
-          participant: ctx.participant
-        },
-        message: ctx.quotedMessage
-      };
 
       if (!mediaMessage.url && !mediaMessage.directPath) {
         if (!mediaMessage.mediaKey || typeof sock.updateMediaMessage !== 'function') {
