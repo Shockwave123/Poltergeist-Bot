@@ -39,10 +39,10 @@ if (versionBadgePattern.test(content)) {
 }
 
 // 2. Node.js badge follows engines.node ------------------------------------------
-const nodeMajor = String(pkg.engines?.node || '').match(/\d+/)?.[0] || '20';
+const nodeVersion = String(pkg.engines?.node || '').match(/\d+(?:\.\d+)?/)?.[0] || '20';
 const beforeNode = content;
-content = content.replace(/(img\.shields\.io\/badge\/Node\.js-)\d+(%2B)?/, `$1${nodeMajor}%2B`);
-if (content !== beforeNode) changes.push(`Node.js badge -> ${nodeMajor}+`);
+content = content.replace(/(img\.shields\.io\/badge\/Node\.js-)\d+(?:\.\d+)?(%2B)?/, `$1${nodeVersion}%2B`);
+if (content !== beforeNode) changes.push(`Node.js badge -> ${nodeVersion}+`);
 
 // 3. Regenerate the stats + command index section --------------------------------
 let groups = [];

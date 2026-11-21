@@ -17,6 +17,8 @@ services:
         sync: false
       - key: OWNER_NAME
         sync: false
+      - key: SETUP_PASSWORD
+        sync: false
       - key: SESSION_ID
         sync: false
       - key: GEMINI_API_KEY

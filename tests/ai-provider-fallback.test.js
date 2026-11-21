@@ -7,6 +7,7 @@ const envNames = [
   'GOOGLE_AI_API_KEY',
   'OPENROUTER_API_KEY',
   'OPENROUTER_API_KEYS',
+  'OPENROUTER_STT_MODEL',
   'NVIDIA_NIM_API_KEY',
   'NVIDIA_NIM_API_KEYS',
   'NVIDIA_API_KEY',
@@ -44,12 +45,15 @@ async function run() {
   for (const name of envNames) delete process.env[name];
   process.env.GEMINI_API_KEY = 'test-gemini-provider-key';
   process.env.NVIDIA_NIM_API_KEY = 'nvapi-test-nvidia-provider-key';
+  process.env.OPENROUTER_API_KEY = 'test-openrouter-provider-key';
   process.env.ZAI_API_KEY = 'test-zai-provider-api-key';
   process.env.AI_PROVIDER_PRIORITY = 'gemini,nvidia,zai';
-  process.env.TRANSCRIPTION_PROVIDER_PRIORITY = 'zai,gemini';
+  process.env.TRANSCRIPTION_PROVIDER_PRIORITY = 'zai,openrouter,nvidia,gemini';
 
   const requests = [];
   let failNvidia = false;
+  let failZaiTranscription = false;
+  let failOpenRouterTranscription = false;
   axios.post = async (url, payload) => {
     requests.push({ url: String(url), payload });
     if (String(url).includes('generativelanguage.googleapis.com')) {
@@ -65,10 +69,27 @@ async function run() {
       }
       return { data: { choices: [{ message: { content: 'NVIDIA fallback answered.' } }] } };
     }
+    if (String(url).includes('ai.api.nvidia.com/v1/audio/transcriptions')) {
+      return { data: { text: 'NVIDIA NIM transcription succeeded.' } };
+    }
+    if (String(url).includes('openrouter.ai/api/v1/audio/transcriptions')) {
+      if (failOpenRouterTranscription) {
+        const error = new Error('simulated OpenRouter transcription rate limit');
+        error.response = { status: 429 };
+        throw error;
+      }
+      return { data: { text: 'OpenRouter transcription succeeded.' } };
+    }
     if (String(url).includes('api.z.ai')) {
-      return String(url).includes('/audio/transcriptions')
-        ? { data: { text: 'Z.AI transcription succeeded.' } }
-        : { data: { choices: [{ message: { content: 'Z.AI fallback answered.' } }] } };
+      if (String(url).includes('/audio/transcriptions')) {
+        if (failZaiTranscription) {
+          const error = new Error('simulated Z.AI transcription rate limit');
+          error.response = { status: 429 };
+          throw error;
+        }
+        return { data: { text: 'Z.AI transcription succeeded.' } };
+      }
+      return { data: { choices: [{ message: { content: 'Z.AI fallback answered.' } }] } };
     }
     throw new Error(`Unexpected API request: ${url}`);
   };
@@ -76,7 +97,7 @@ async function run() {
   try {
     const { generateContent, resolveAiCredentialChain } = require('../utils/googleAi');
     const chain = resolveAiCredentialChain();
-    assert.deepEqual(chain.map(({ provider }) => provider), ['gemini', 'nvidia', 'zai']);
+    assert.deepEqual(chain.map(({ provider }) => provider), ['gemini', 'nvidia', 'zai', 'openrouter']);
 
     const nvidiaAnswer = await generateContent([{ text: 'test' }], {
       fast: true,
@@ -100,6 +121,17 @@ async function run() {
     const transcript = await transcribeAudio(makeWav(), 'sample.wav', 'audio/wav');
     assert.equal(transcript, 'Z.AI transcription succeeded.');
     assert.ok(requests.some(({ url }) => url === 'https://api.z.ai/api/paas/v4/audio/transcriptions'));
+
+    delete process.env.TRANSCRIPTION_PROVIDER_PRIORITY;
+    failZaiTranscription = true;
+    const openRouterTranscript = await transcribeAudio(makeWav(), 'sample.wav', 'audio/wav');
+    assert.equal(openRouterTranscript, 'OpenRouter transcription succeeded.');
+    assert.ok(requests.some(({ url }) => url === 'https://openrouter.ai/api/v1/audio/transcriptions'));
+
+    failOpenRouterTranscription = true;
+    const nvidiaTranscript = await transcribeAudio(makeWav(), 'sample.wav', 'audio/wav');
+    assert.equal(nvidiaTranscript, 'NVIDIA NIM transcription succeeded.');
+    assert.ok(requests.some(({ url }) => url === 'https://ai.api.nvidia.com/v1/audio/transcriptions'));
 
     console.log('AI provider fallback and transcription tests passed.');
   } finally {

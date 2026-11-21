@@ -2,7 +2,7 @@
  * ViewOnce Command - Reveal view-once messages
  */
 
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const config = require('../../config');
 const { normalizeJidWithLid } = require('../../utils/jidHelper');
 
@@ -33,6 +33,15 @@ function getViewOnceMedia(quotedMessage) {
     : null;
 }
 
+async function downloadViewOnceMedia(sock, targetMessage, downloader = downloadMediaMessage) {
+  return downloader(
+    targetMessage,
+    'buffer',
+    {},
+    { logger: undefined, reuploadRequest: sock.updateMediaMessage }
+  );
+}
+
 module.exports = {
   name: 'viewonce',
   aliases: ['readvo', 'vv', 'readviewonce', 'wow'],
@@ -40,6 +49,7 @@ module.exports = {
   description: 'Reveal view-once messages and forward them to owner DM',
   usage: '.viewonce (reply to view-once message)',
   getViewOnceMedia,
+  downloadViewOnceMedia,
   
   async execute(sock, msg, args) {
     try {
@@ -78,43 +88,17 @@ module.exports = {
           id: ctx.stanzaId,
           participant: ctx.participant
         },
-        message: actualMsg
+        message: ctx.quotedMessage
       };
 
-      const downloadType =
-        mtype === 'imageMessage'
-          ? 'image'
-          : mtype === 'videoMessage'
-          ? 'video'
-          : mtype === 'audioMessage'
-          ? 'audio'
-          : 'document';
-
-      const download = async () => {
-        const mediaStream = await downloadContentFromMessage(mediaMessage, downloadType);
-        const chunks = [];
-        for await (const chunk of mediaStream) chunks.push(chunk);
-        return Buffer.concat(chunks);
-      };
-
-      let buffer;
       if (!mediaMessage.url && !mediaMessage.directPath) {
         if (!mediaMessage.mediaKey || typeof sock.updateMediaMessage !== 'function') {
-          throw new Error('The quoted media has no download path and cannot be refreshed.');
+          throw new Error('WhatsApp did not include a media download URL or media key for the quoted message. Ask the sender to resend it.');
         }
         await sock.updateMediaMessage(targetMessage);
       }
 
-      try {
-        buffer = await download();
-      } catch (downloadError) {
-        const status = downloadError.status || downloadError.statusCode || downloadError.output?.statusCode;
-        if (![404, 410].includes(status) || !mediaMessage.mediaKey || typeof sock.updateMediaMessage !== 'function') {
-          throw downloadError;
-        }
-        await sock.updateMediaMessage(targetMessage);
-        buffer = await download();
-      }
+      const buffer = await downloadViewOnceMedia(sock, targetMessage);
 
       const caption = mediaMessage.caption || '';
       const ownerNumber = Array.isArray(config.ownerNumber)

@@ -92,6 +92,7 @@ const database = require('./database');
 const sessionManager = require('./utils/sessionManager');
 const store = require('./utils/messageStore');
 const { stopCleanup, cleanupOldFiles } = require('./utils/cleanup');
+const { isSetupPasswordConfigured, verifySetupPassword } = require('./utils/setupAuth');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -240,8 +241,8 @@ const setupPage = () => `<!doctype html>
 
     <h2>Session id</h2>
     <div id="session-box" class="ok" style="display:none">
-      <div class="small"><strong>Session generated.</strong> Copy it from the welcome message the bot sent to your WhatsApp
-        (or use the <code>sessionid</code> command) and keep it safe &mdash; it can log in as this WhatsApp account.</div>
+      <div class="small"><strong>Session stored.</strong> This page never displays the session credential.
+        The owner can request it with <code>sessionid file</code> in a private chat.</div>
       <div style="margin-top:8px;font-family:monospace;word-break:break-all;" id="session-text"></div>
     </div>
     <p class="muted small" id="session-info">No session stored yet. Pair with a QR code or a pairing code to create one.</p>
@@ -369,8 +370,8 @@ const setupPage = () => `<!doctype html>
 
         if (data.sessionReady) {
           sessionBox.style.display = 'block';
-          sessionText.textContent = data.sessionPreview || '';
-          sessionInfo.textContent = 'Session stored on the server. Add it as the SESSION_ID environment variable to survive restarts.';
+          sessionText.textContent = 'Credential hidden';
+          sessionInfo.textContent = 'Keep the deployment setup password private. The owner can export the session with the owner-only session command.';
         } else {
           sessionBox.style.display = 'none';
         }
@@ -448,6 +449,11 @@ const setupPage = () => `<!doctype html>
 </html>`;
 
 const startSetupServer = () => {
+  const setupPassword = process.env.SETUP_PASSWORD || '';
+  if (!isSetupPasswordConfigured(setupPassword)) {
+    console.error('[setup] SETUP_PASSWORD is missing or shorter than 16 characters; the web setup and pairing endpoints are disabled.');
+  }
+
   const server = http.createServer(async (request, response) => {
     const url = (request.url || '/').split('?')[0];
 
@@ -477,6 +483,22 @@ const startSetupServer = () => {
       return;
     }
 
+    if (url === '/' || url.startsWith('/api/')) {
+      const passwordConfigured = isSetupPasswordConfigured(setupPassword);
+      if (!passwordConfigured || !verifySetupPassword(request.headers.authorization, setupPassword)) {
+        const status = passwordConfigured ? 401 : 503;
+        response.writeHead(status, {
+          'content-type': 'text/plain; charset=utf-8',
+          'cache-control': 'no-store',
+          ...(passwordConfigured ? { 'www-authenticate': 'Basic realm="Poltergeist setup"' } : {})
+        });
+        response.end(passwordConfigured
+          ? 'Authentication required.'
+          : 'Setup is disabled. Configure SETUP_PASSWORD with at least 16 characters.');
+        return;
+      }
+    }
+
     if (request.method === 'GET' && url === '/api/status') {
       const session = sessionManager.getStatus();
       const pairingActive = Boolean(latestPairingCode) && (Date.now() - pairingCodeIssuedAt) < PAIRING_CODE_TTL_MS;
@@ -497,7 +519,6 @@ const startSetupServer = () => {
         botNumber: activeSocket?.user?.id ? activeSocket.user.id.split(':')[0].split('@')[0] : null,
         authMethod,
         sessionReady: session.hasSession,
-        sessionPreview: session.sessionPreview,
         // Countdown data for the phone-number pairing timer
         pairingActive,
         pairing: pairingActive ? {
@@ -689,7 +710,8 @@ const printHostedSetupMessage = () => {
   console.log('🌐 Hosted setup detected.');
   console.log('➡️ A stored session (SESSION_ID or database/session.json) is loaded automatically.');
   console.log('➡️ Otherwise open the setup page to scan the QR code or request a pairing code.');
-  console.log('➡️ After linking, the session id is saved on disk and sent to your WhatsApp.');
+  console.log('➡️ After linking, the session id is saved locally. Export it only with the owner-only .sessionid command.');
+  console.log('➡️ Set SETUP_PASSWORD to a private value (at least 16 characters) to protect the QR and pairing page.');
   console.log('➡️ Recommended env vars: SESSION_ID, OWNER_NUMBER, GEMINI_API_KEY or OPENROUTER_API_KEY');
   console.log('');
 };
@@ -755,7 +777,7 @@ function prepareAuthFiles() {
   if (authMethod === 'none' || authMethod === 'qr') authMethod = 'session-file';
 }
 
-/** Export creds into a session id, remember it, and print it for the deployment logs. */
+/** Export creds into a session id and persist it without printing the credential. */
 function persistSession(context = 'update') {
   try {
     if (!sessionManager.hasLocalCreds()) return null;
@@ -769,10 +791,8 @@ function persistSession(context = 'update') {
       : (pendingPairingPhone || sessionManager.getState().phoneNumber || '');
 
     sessionManager.setSessionId(sessionId, { authMethod, phoneNumber });
-    console.log(`\n✅ Session id ${context === 'link' ? 'generated' : 'updated'} (${sessionId.length} chars).`);
-    console.log('📦 Copy it into the SESSION_ID environment variable so the bot stays linked across restarts:');
-    console.log(sessionId);
-    console.log('');
+    console.log(`\n✅ Session id ${context === 'link' ? 'generated' : 'updated'} (${sessionId.length} chars) and stored locally.`);
+    console.log('🔐 Use the owner-only .sessionid command in a private chat only if you need to export it.');
     return sessionId;
   } catch (error) {
     console.error('[session] persist failed:', error?.message || error);
@@ -991,8 +1011,8 @@ function clearHealthMonitor() {
   }
 }
 
-/** Welcome DM that carries the freshly generated session id. */
-async function sendWelcomeMessage(sock, sessionId) {
+/** Welcome DM for the linked account; session credentials are never sent automatically. */
+async function sendWelcomeMessage(sock) {
   const userNumber = sock?.user?.id ? sock.user.id.split(':')[0].split('@')[0] : '';
   if (!userNumber) return false;
   const userJid = `${userNumber}@s.whatsapp.net`;
@@ -1017,38 +1037,9 @@ async function sendWelcomeMessage(sock, sessionId) {
     ''
   ];
 
-  if (sessionId) {
-    lines.push(
-      '━━━━━━━━━━━━━━━━━━━━━━',
-      '🔑 *YOUR SESSION ID*',
-      '',
-      'Keep this string safe. It is the login credential for this WhatsApp account and it is what lets the bot stay linked after a restart or redeploy.',
-      '',
-      sessionId,
-      '',
-      '⚠️ *Never share it with anyone.* Anyone who has it can control this WhatsApp account.',
-      '💡 On Render, paste it into the `SESSION_ID` environment variable. You can also ask for it again with the `sessionid` command (owner only, private chat).',
-      ''
-    );
-  }
-
   lines.push(`> _Powered by ${config.botName}_`);
 
   await sock.sendMessage(userJid, { text: lines.join('\n') });
-
-  // Extra copy as a text file so it is easy to copy on a phone
-  if (sessionId) {
-    try {
-      await sock.sendMessage(userJid, {
-        document: Buffer.from(sessionId, 'utf8'),
-        mimetype: 'text/plain',
-        fileName: 'PoltergeistMD-session.txt',
-        caption: '🗂️ Backup copy of your session id. Store it somewhere private.'
-      });
-    } catch (error) {
-      console.error('[welcome] session file send failed:', error?.message || error);
-    }
-  }
 
   return true;
 }
@@ -1368,7 +1359,7 @@ async function startBot(reason = 'startup') {
         // 2) Deliver the session id together with the welcome message (once per pairing)
         if (config.sendWelcomeOnConnect && sessionId && sessionManager.needsWelcome(sessionId, botNumber)) {
           try {
-            if (await sendWelcomeMessage(sock, sessionId)) {
+            if (await sendWelcomeMessage(sock)) {
               sessionManager.markWelcomeSent(sessionId, botNumber);
               lastWelcomeSessionId = sessionId;
               console.log('📩 First-link welcome message + session id delivered to the linked number.');
@@ -1579,7 +1570,7 @@ console.log(`👑 Owner: ${startupOwnerNames}\n`);
 
 const startupSession = sessionManager.getStatus();
 console.log(startupSession.hasSession
-  ? `📡 Stored session found (${startupSession.sessionPreview}, linked via ${startupSession.authMethod}).`
+  ? `📡 Stored session found (linked via ${startupSession.authMethod}).`
   : '📡 No stored session yet - the setup page will show a QR code to scan or a pairing code to request.');
 console.log('');
 

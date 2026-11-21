@@ -77,6 +77,8 @@ to the next configured provider.
 • Both may be configured at the same time (recommended).
 • Extra keys can be added with a comma: GEMINI_API_KEY=key1,key2
 • Set AI_PROVIDER_PRIORITY=openrouter,nvidia,zai,gemini to control the order.
+• Transcription uses Z.AI → OpenRouter → NVIDIA NIM → OpenAI → Gemini by default;
+  set TRANSCRIPTION_PROVIDER_PRIORITY to change that order.
 • Check the live status of every key with: ${extra.prefix || '.'}aikey status
 
 ───────────────────────────────────────────────────────────────

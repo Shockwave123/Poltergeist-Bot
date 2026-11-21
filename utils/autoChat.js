@@ -23,6 +23,7 @@ function loadState() {
         enabled: false,
         chatId: null,
         dmEnabled: false,
+        personality: null,
         history: {},
         conversations: {},
         ...(parsed && typeof parsed === 'object' ? parsed : {})
@@ -32,7 +33,7 @@ function loadState() {
   } catch (error) {
     console.error('[autochat] load error:', error.message);
   }
-  cachedState = { enabled: false, chatId: null, dmEnabled: false, history: {}, conversations: {} };
+  cachedState = { enabled: false, chatId: null, dmEnabled: false, personality: null, history: {}, conversations: {} };
   return cachedState;
 }
 
@@ -95,6 +96,15 @@ function setDmEnabled(enabled) {
   return saveState({ ...state, dmEnabled: enabled === true }, true);
 }
 
+function getPersonality() {
+  return loadState().personality || null;
+}
+
+function setPersonality(personality) {
+  const state = loadState();
+  return saveState({ ...state, personality }, true);
+}
+
 function recordMessage(chatId, text) {
   if (!chatId || !text) return;
   const state = loadState();
@@ -154,6 +164,8 @@ module.exports = {
   disable,
   isDmEnabled,
   setDmEnabled,
+  getPersonality,
+  setPersonality,
   recordMessage,
   recordBotReply,
   getRecentMessages,

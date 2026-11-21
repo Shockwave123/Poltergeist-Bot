@@ -39,7 +39,7 @@ module.exports = {
           `│ Link method: *${status.authMethod}*`,
           `│ Linked number: ${state.phoneNumber || 'unknown'}`,
           `│ Linked at: ${state.linkedAt ? moment(state.linkedAt).tz(config.timezone).format('MMM D, YYYY h:mm A z') : 'unknown'}`,
-          `│ Preview: ${status.sessionPreview}`,
+          `│ Credential: ${status.hasSession ? 'stored' : 'not stored'}`,
           `│ Welcome sent: ${status.welcomeSent ? '✅' : '⏳'}`,
           '│',
           `│ • \`${prefix}sessionid\` - receive the full session id`,

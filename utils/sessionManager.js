@@ -287,14 +287,6 @@ const clearLocalCreds = () => {
   }
 };
 
-/** Short, safe-to-display preview of a session id. */
-const previewSession = (sessionId) => {
-  const value = sessionId || getSessionId();
-  if (!value) return 'none';
-  if (value.length <= 26) return value;
-  return `${value.slice(0, 18)}...${value.slice(-6)}`;
-};
-
 /** Welcome/session delivery is once per linked WhatsApp number, not per credential refresh. */
 const needsWelcome = (sessionId, phoneNumber = '') => {
   const state = getState();
@@ -323,7 +315,6 @@ const getStatus = () => {
     // `requestPairingCode` writes me/pairingCode before WhatsApp confirms the link.
     credsOnDisk: hasCreds,
     credsLinked: hasCreds,
-    sessionPreview: previewSession(state.sessionId),
     authMethod: state.authMethod,
     phoneNumber: state.phoneNumber,
     linkedAt: state.linkedAt,
@@ -357,7 +348,6 @@ module.exports = {
   setSessionId,
   getSessionId,
   clearLocalCreds,
-  previewSession,
   needsWelcome,
   markWelcomeSent,
   getStatus

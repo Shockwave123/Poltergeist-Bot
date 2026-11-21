@@ -14,6 +14,7 @@ process.env.AUTOCHAT_STATE_FILE = statePath;
 const { handleChat, handleContinuousChat } = require('../commands/admin/chatbot');
 const autoChat = require('../utils/autoChat');
 const chatbotCommand = require('../commands/admin/chatbot');
+const autoChatCommand = require('../commands/owner/autochat');
 const database = require('../database');
 
 async function run() {
@@ -107,6 +108,16 @@ async function run() {
       else assert.ok(!cyclePrompts[index].includes('Personality:'));
     });
 
+    await autoChatCommand.execute(sock, {}, ['personality', 'Nonchalant Friend'], {
+      from: 'autochat-personality-owner@g.us',
+      reply
+    });
+    assert.equal(autoChat.getPersonality(), 'nonchalant');
+    await handleContinuousChat(sock, {
+      key: { remoteJid: 'autochat-personality-test@g.us', participant: 'user@s.whatsapp.net' }
+    }, 'hello', 'autochat-personality-test@g.us');
+    assert.ok(prompts.at(-1).includes('Personality: Be an unbothered, dry, low-energy friend'));
+
     await new Promise((resolve) => setTimeout(resolve, 300));
     const persistedState = JSON.parse(fs.readFileSync(statePath, 'utf8'));
     assert.equal(persistedState.conversations['autochat-test@g.us'].at(-1).text, 'Hey there!');
@@ -117,6 +128,7 @@ async function run() {
     database.getGroupSettings = originalGetGroupSettings;
     database.updateGroupSettings = originalUpdateGroupSettings;
     autoChat.disable();
+    autoChat.setPersonality(null);
     fs.rmSync(statePath, { force: true });
     if (previousApiKey === undefined) delete process.env.GEMINI_API_KEY;
     else process.env.GEMINI_API_KEY = previousApiKey;

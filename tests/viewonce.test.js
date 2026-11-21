@@ -35,4 +35,27 @@ assert.deepEqual(
 );
 assert.equal(viewOnce.getViewOnceMedia({ imageMessage: { viewOnce: false } }), null);
 
-console.log('View-once message parsing and alias tests passed.');
+async function testDownloadUsesReuploadCallback() {
+  const targetMessage = { key: { id: 'quoted-id' }, message: { imageMessage: image.imageMessage } };
+  const updateMediaMessage = async () => {};
+  let downloadArguments;
+  const buffer = await viewOnce.downloadViewOnceMedia(
+    { updateMediaMessage },
+    targetMessage,
+    async (...args) => {
+      downloadArguments = args;
+      return Buffer.from('media');
+    }
+  );
+  assert.equal(buffer.toString(), 'media');
+  assert.equal(downloadArguments[0], targetMessage);
+  assert.equal(downloadArguments[1], 'buffer');
+  assert.equal(downloadArguments[3].reuploadRequest, updateMediaMessage);
+}
+
+testDownloadUsesReuploadCallback()
+  .then(() => console.log('View-once parsing, download recovery, and alias tests passed.'))
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

@@ -3,14 +3,19 @@
  */
 
 const autoChat = require('../../utils/autoChat');
-const { clearContinuousChat } = require('../admin/chatbot');
+const {
+  clearContinuousChat,
+  PERSONALITIES,
+  findPersonality,
+  normalizePersonalityInput
+} = require('../admin/chatbot');
 
 module.exports = {
   name: 'autochat',
   aliases: ['continuouschat', 'chatmode'],
   category: 'owner',
   description: 'Enable continuous chat in this chat or AI replies to private messages',
-  usage: '.autochat [on/off|dm on/off]',
+  usage: '.autochat [on/off|dm on/off|personality <name|cycle|default>]',
   ownerOnly: true,
 
   async execute(sock, msg, args, extra) {
@@ -28,15 +33,55 @@ module.exports = {
         : '✅ AI replies to private messages are off.');
     }
 
+    if (option === 'personality') {
+      const requested = args.slice(1).join(' ').trim();
+      const currentSelection = autoChat.getPersonality();
+      if (!requested) {
+        const current = currentSelection === 'cycle'
+          ? 'Automatic cycle'
+          : (PERSONALITIES.find(({ id }) => id === currentSelection)?.name || 'Group chatbot setting');
+        return extra.reply(
+          `Auto-chat personality: *${current}*\n` +
+          `Use ".autochat personality cycle", ".autochat personality default", or a character name.\n` +
+          `Available: ${PERSONALITIES.map(({ name }) => name).join(', ')}`
+        );
+      }
+
+      const normalized = normalizePersonalityInput(requested);
+      if (['cycle', 'auto', 'automatic'].includes(normalized)) {
+        autoChat.setPersonality('cycle');
+        return extra.reply('*Auto-chat personality set to automatic cycle through all 11 personalities.*');
+      }
+
+      const selected = findPersonality(requested)
+        || (['default bot', 'default personality', 'bot default'].includes(normalized)
+          ? PERSONALITIES.find(({ id }) => id === 'default')
+          : null);
+      if (!selected) {
+        return extra.reply(
+          `*Usage: .autochat personality cycle | default | <name>*\n` +
+          `Available: ${PERSONALITIES.map(({ name }) => name).join(', ')}`
+        );
+      }
+      autoChat.setPersonality(selected.id);
+      return extra.reply(`*Auto-chat personality set to ${selected.name}.*`);
+    }
+
     if (!option) {
       const activeChat = autoChat.getActiveChat();
+      const currentSelection = autoChat.getPersonality();
+      const personality = currentSelection === 'cycle'
+        ? 'Automatic cycle'
+        : (PERSONALITIES.find(({ id }) => id === currentSelection)?.name || 'Group chatbot setting');
       return extra.reply(
         `*CONTINUOUS CHAT*\n\nStatus: ${activeChat ? '✅ On' : '❌ Off'}\n` +
         `Private-chat replies: ${autoChat.isDmEnabled() ? '✅ On' : '❌ Off'}\n` +
+        `Personality: ${personality}\n` +
         `${activeChat ? `Active chat: ${activeChat === chatId ? 'this chat' : 'another chat'}\n` : ''}\n` +
         `Use *.autochat on* to start in this chat.\n` +
         `Use *.autochat off* to stop it.\n` +
-        `Use *.autochat dm on/off* to control private-chat replies.`
+        `Use *.autochat dm on/off* to control private-chat replies.\n` +
+        `Use *.autochat personality <name|cycle|default>* to choose a character.`
       );
     }
 
@@ -55,6 +100,6 @@ module.exports = {
       return extra.reply('✅ Continuous chat disabled.');
     }
 
-    return extra.reply('❌ Use `.autochat on` or `.autochat off`.');
+    return extra.reply('❌ Use `.autochat on/off`, `.autochat dm on/off`, or `.autochat personality <name|cycle|default>`.');
   },
 };

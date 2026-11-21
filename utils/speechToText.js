@@ -8,7 +8,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { generateContent } = require('./googleAi');
+const { generateContent, resolveAiCredentialChain } = require('./googleAi');
 const ffmpegPath = require('ffmpeg-static');
 
 const TRANSCRIPTION_URL = process.env.TRANSCRIPTION_URL || 'https://api.openai.com/v1/audio/transcriptions';
@@ -83,15 +83,48 @@ async function transcribeWithOpenAI(buffer, filename, mimeType) {
   return text;
 }
 
-function getApiKey(...names) {
-  for (const name of names) {
-    const key = String(process.env[name] || '').split(/[\s,;]+/).find(Boolean);
-    if (key) return key.trim();
-  }
-  return '';
+async function transcribeWithOpenRouter(buffer, filename, mimeType, apiKey) {
+  const form = new FormData();
+  form.append('file', buffer, { filename, contentType: mimeType });
+  form.append('model', process.env.OPENROUTER_STT_MODEL || 'openai/whisper-large-v3');
+  const { data } = await axios.post(
+    'https://openrouter.ai/api/v1/audio/transcriptions',
+    form,
+    {
+      headers: {
+        ...form.getHeaders(),
+        Authorization: `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://github.com/Poltergeist-Bot',
+        'X-OpenRouter-Title': 'Poltergeist MD WhatsApp Bot'
+      },
+      timeout: PROVIDER_TIMEOUT_MS,
+      maxBodyLength: 25 * 1024 * 1024
+    }
+  );
+  const text = data?.text?.trim();
+  if (!text) throw new Error('OpenRouter returned an empty transcript.');
+  return text;
 }
 
-async function transcribeWithZai(buffer, filename) {
+async function transcribeWithNvidia(buffer, filename, mimeType, apiKey) {
+  const form = new FormData();
+  form.append('file', buffer, { filename, contentType: mimeType });
+  form.append('model', process.env.NVIDIA_NIM_TRANSCRIPTION_MODEL || 'nvidia/parakeet-ctc-1.1b-asr');
+  const { data } = await axios.post(
+    process.env.NVIDIA_NIM_TRANSCRIPTION_URL || 'https://ai.api.nvidia.com/v1/audio/transcriptions',
+    form,
+    {
+      headers: { ...form.getHeaders(), Authorization: `Bearer ${apiKey}` },
+      timeout: PROVIDER_TIMEOUT_MS,
+      maxBodyLength: 25 * 1024 * 1024
+    }
+  );
+  const text = data?.text?.trim();
+  if (!text) throw new Error('NVIDIA NIM returned an empty transcript.');
+  return text;
+}
+
+async function transcribeWithZai(buffer, filename, apiKey) {
   const converted = await splitAudio(buffer, filename, 25);
   try {
     const transcripts = [];
@@ -109,7 +142,7 @@ async function transcribeWithZai(buffer, filename) {
         {
           headers: {
             ...form.getHeaders(),
-            Authorization: `Bearer ${getApiKey('ZAI_API_KEY', 'ZAI_API_KEYS', 'ZHIPUAI_API_KEY')}`
+            Authorization: `Bearer ${apiKey}`
           },
           timeout: PROVIDER_TIMEOUT_MS,
           maxBodyLength: 25 * 1024 * 1024
@@ -125,24 +158,29 @@ async function transcribeWithZai(buffer, filename) {
   }
 }
 
-function getTranscriptionProviders() {
-  const priority = String(process.env.TRANSCRIPTION_PROVIDER_PRIORITY || 'zai,openai,gemini')
+function getTranscriptionProviders(options = {}) {
+  const credentials = resolveAiCredentialChain(options);
+  const priority = String(
+    process.env.TRANSCRIPTION_PROVIDER_PRIORITY
+      || 'zai,openrouter,nvidia,openai,gemini'
+  )
     .toLowerCase()
     .split(/[\s,;]+/);
-  const providers = {
-    zai: () => getApiKey('ZAI_API_KEY', 'ZAI_API_KEYS', 'ZHIPUAI_API_KEY'),
-    openai: () => process.env.OPENAI_API_KEY,
-    gemini: () => true
-  };
-  return [...new Set([...priority, 'zai', 'openai', 'gemini'])]
-    .filter((provider) => providers[provider] && providers[provider]());
+  const available = credentials.map(({ provider, key }) => ({ provider, key }));
+  if (process.env.OPENAI_API_KEY) {
+    available.push({ provider: 'openai', key: process.env.OPENAI_API_KEY });
+  }
+  const order = [...new Set([...priority, 'zai', 'openrouter', 'nvidia', 'openai', 'gemini'])];
+  return order.flatMap((provider) => available.filter((entry) => entry.provider === provider));
 }
 
 async function transcribePart(buffer, filename, mimeType, options) {
   const failures = [];
-  for (const provider of getTranscriptionProviders()) {
+  for (const { provider, key } of getTranscriptionProviders(options)) {
     try {
-      if (provider === 'zai') return await transcribeWithZai(buffer, filename);
+      if (provider === 'zai') return await transcribeWithZai(buffer, filename, key);
+      if (provider === 'openrouter') return await transcribeWithOpenRouter(buffer, filename, mimeType, key);
+      if (provider === 'nvidia') return await transcribeWithNvidia(buffer, filename, mimeType, key);
       if (provider === 'openai') return await transcribeWithOpenAI(buffer, filename, mimeType);
       return await transcribeWithGemini(buffer, mimeType, options);
     } catch (error) {

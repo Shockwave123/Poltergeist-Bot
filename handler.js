@@ -34,7 +34,12 @@ const ANTIBADWORD_STICKER_PATH = path.join(__dirname, 'utils', 'galimatde.webp')
 const ANTIBADWORD_STICKER_AUTHOR = 'GALI MAT DE BSDK';
 let antibadwordStickerCache = null;
 
-const getAntibadwordSticker = async () => {
+const getAntibadwordSticker = async (groupSettings) => {
+  if (typeof groupSettings.antibadwordSticker === 'string') {
+    const customSticker = Buffer.from(groupSettings.antibadwordSticker, 'base64');
+    if (customSticker.length) return customSticker;
+  }
+
   try {
     if (!antibadwordStickerCache && fs.existsSync(ANTIBADWORD_STICKER_PATH)) {
       const raw = fs.readFileSync(ANTIBADWORD_STICKER_PATH);
@@ -1471,7 +1476,7 @@ const handleAntibadword = async (sock, msg, groupMetadata, userMessage, sender) 
         }, { quoted: msg });
       }
     } else {
-      const sticker = await getAntibadwordSticker();
+      const sticker = await getAntibadwordSticker(groupSettings);
       if (sticker) {
         await sock.sendMessage(from, { sticker }, { quoted: msg });
       }

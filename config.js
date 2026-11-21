@@ -23,7 +23,7 @@ module.exports = {
     updateZipUrl: '', // URL to latest code zip for .update command
 
     // Session & Connection Behaviour
-    sendWelcomeOnConnect: process.env.SEND_WELCOME !== 'false', // DM the linked number (includes the session id)
+    sendWelcomeOnConnect: process.env.SEND_WELCOME !== 'false', // Send a non-sensitive welcome DM after linking
     sessionAutoSave: true, // persist the session id to database/session.json after every link
     autoRelinkOnLogout: process.env.AUTO_RELINK !== 'false', // show a fresh QR instead of dying when WhatsApp logs us out
 

@@ -357,7 +357,9 @@ async function handleContinuousChat(sock, msg, text, chatId) {
   messages.push({ role: 'user', text: text.trim() });
   if (messages.length > MAX_CONTEXT_MESSAGES) messages.shift();
 
-  const personality = resolvePersonality(chatId, getConfiguredPersonality(chatId));
+  const personalitySelection = require('../../utils/autoChat').getPersonality()
+    || getConfiguredPersonality(chatId);
+  const personality = resolvePersonality(chatId, personalitySelection);
   await sock.sendPresenceUpdate('composing', chatId);
   const response = await getAIResponse(text.trim(), {
     messages,
@@ -385,6 +387,9 @@ module.exports = {
   handleContinuousChat,
   clearContinuousChat,
   formatConversationHistory,
+  PERSONALITIES,
+  findPersonality,
+  normalizePersonalityInput,
 
   async execute(sock, msg, args, extra) {
     const match = (args[0] || '').toLowerCase().trim();

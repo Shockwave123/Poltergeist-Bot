@@ -72,8 +72,8 @@ module.exports = {
         );
       } else if (status.hasSession) {
         lines.push(
-          `│ 🔎 *Session preview:* ${status.sessionPreview}`,
-          '│ Use `.sessionid` (owner only) to receive the full string.',
+          '│ 🔐 Session credential is hidden.',
+          '│ The owner can export it with `.sessionid file` in a private chat.',
           '│'
         );
       }
