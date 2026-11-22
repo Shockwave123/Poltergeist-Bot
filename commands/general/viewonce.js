@@ -101,7 +101,10 @@ module.exports = {
       const mediaMessage = actualMsg[mtype];
 
       if (!mediaMessage.url && !mediaMessage.directPath) {
-        if (!mediaMessage.mediaKey || typeof sock.updateMediaMessage !== 'function') {
+        if (!mediaMessage.mediaKey) {
+          throw new Error('WhatsApp did not include a media download URL or media key for the quoted message. Ask the sender to resend it.');
+        }
+        if (typeof sock.updateMediaMessage !== 'function') {
           throw new Error('WhatsApp did not include a media download URL or media key for the quoted message. Ask the sender to resend it.');
         }
         await sock.updateMediaMessage(targetMessage);
