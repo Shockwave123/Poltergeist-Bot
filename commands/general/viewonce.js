@@ -25,19 +25,41 @@ function getViewOnceMedia(quotedMessage) {
   const viewOnceContent = quoted.viewOnceMessageV2Extension?.message
     || quoted.viewOnceMessageV2?.message
     || quoted.viewOnceMessage?.message;
-  const mediaMessage = viewOnceContent ? unwrapMessage(viewOnceContent) : quoted;
-  const messageType = MEDIA_TYPES.find((type) =>
-    mediaMessage[type] && (viewOnceContent || mediaMessage[type].viewOnce)
-  );
-  return messageType
-    ? { messageType, message: { [messageType]: mediaMessage[messageType] } }
+  
+  // Also check for viewOnce: true directly on the message types
+  // This handles cases where WhatsApp includes view-once flag directly on the message
+  let mediaMessage = quoted;
+  let detectedType = null;
+  
+  // Check if the quoted message itself has viewOnce flag on media types
+  for (const type of MEDIA_TYPES) {
+    if (quoted[type] && quoted[type].viewOnce) {
+      mediaMessage = quoted;
+      detectedType = type;
+      break;
+    }
+  }
+  
+  // If not found directly, use the original logic
+  if (!detectedType) {
+    mediaMessage = viewOnceContent ? unwrapMessage(viewOnceContent) : quoted;
+    detectedType = MEDIA_TYPES.find((type) =>
+      mediaMessage[type] && (viewOnceContent || mediaMessage[type].viewOnce)
+    );
+  }
+  
+  return detectedType
+    ? { messageType: detectedType, message: { [detectedType]: mediaMessage[detectedType] } }
     : null;
 }
 
 async function getQuotedTargetMessage(chatId, contextInfo) {
+  // First try to load from message store (cached)
   const cachedMessage = await messageStore.loadMessage(chatId, contextInfo.stanzaId);
   if (cachedMessage) return cachedMessage;
 
+  // If not cached, return the quoted message from contextInfo
+  // This is the message that was quoted/replied to
   return {
     key: {
       remoteJid: chatId,
