@@ -1,5 +1,6 @@
-import axios from 'axios';
-export default {
+const axios = require('axios');
+
+module.exports = {
     command: 'alamy',
     aliases: ['alamydl', 'alamydownload'],
     category: 'downloaders',

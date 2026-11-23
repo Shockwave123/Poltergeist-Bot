@@ -11,6 +11,7 @@ const image = {
 };
 
 assert.ok(viewOnce.aliases.includes('wow'));
+assert.ok(viewOnce.aliases.includes('view'));
 assert.deepEqual(
   viewOnce.getViewOnceMedia({
     ephemeralMessage: {
@@ -22,6 +23,25 @@ assert.deepEqual(
     }
   }),
   { messageType: 'imageMessage', message: image }
+);
+assert.deepEqual(
+  viewOnce.getViewOnceMedia({
+    ephemeralMessage: {
+      message: {
+        viewOnceMessageV2: {
+          message: {
+            documentMessage: { viewOnce: true, mediaKey: Buffer.from('document-key') }
+          }
+        }
+      }
+    }
+  }),
+  {
+    messageType: 'documentMessage',
+    message: {
+      documentMessage: { viewOnce: true, mediaKey: Buffer.from('document-key') }
+    }
+  }
 );
 assert.deepEqual(
   viewOnce.getViewOnceMedia({

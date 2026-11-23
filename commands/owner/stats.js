@@ -4,6 +4,7 @@
 
 const database = require('../../database');
 const sessionManager = require('../../utils/sessionManager');
+const config = require('../../config');
 
 const fmtUptime = (s) => {
   const d = Math.floor(s / 86400);
@@ -36,23 +37,19 @@ module.exports = {
       const heapUsed = Math.round(mem.heapUsed  / (1024 * 1024));
       const heapTotal= Math.round(mem.heapTotal / (1024 * 1024));
       const extMb    = Math.round(mem.external  / (1024 * 1024));
-      const RAM_LIMIT = 460;
+      const RAM_LIMIT = config.health.memoryLimitMb;
 
       const uptimeSec = Math.round(process.uptime());
 
-      // Pull live stats from index.js if available
-      let connStats = null;
-      let msgStoreSz = 0;
-      try {
-        const index = require('../../index');
-        if (typeof index.connectionStats === 'function') connStats = index.connectionStats();
-        if (index.store?.messages) msgStoreSz = index.store.messages.size;
-      } catch (e) { /* standalone mode */ }
+      const connStats = typeof sock.getConnectionStats === 'function'
+        ? sock.getConnectionStats()
+        : null;
 
       const session = sessionManager.getStatus();
       const dbCacheSize = typeof database.getCacheSize === 'function' ? database.getCacheSize() : '?';
 
       const linked    = connStats?.linked ?? Boolean(sock?.user?.id);
+      const connected = connStats?.connected ?? Boolean(sock?.user?.id);
       const reconns   = connStats?.reconnects ?? '—';
       const totalMsgs = connStats?.totalMessagesSeen ?? '—';
       const method    = connStats?.authMethod ?? session.authMethod ?? '?';
@@ -61,9 +58,11 @@ module.exports = {
         '╭───『 📊 *BOT STATS* 』───',
         '│',
         '│ 🔌 *CONNECTION*',
-        `│ • Status:     ${linked ? '✅ Linked' : '❌ Not linked'}`,
+        `│ • Status:     ${connected ? '✅ Connected' : '❌ Disconnected'} / ${linked ? 'linked' : 'not linked'}`,
         `│ • Auth:       ${method}`,
         `│ • Reconnects: ${reconns}`,
+        `│ • Last close: ${connStats?.lastDisconnectReason || 'none'}`,
+        `│ • Last activity: ${Number.isFinite(connStats?.lastServerTrafficAgeSeconds) ? `${connStats.lastServerTrafficAgeSeconds}s ago` : 'n/a'}`,
         `│ • Messages:   ${totalMsgs}`,
         '│',
         '│ ⏱️ *UPTIME*',
@@ -79,7 +78,7 @@ module.exports = {
         '│',
         '│ 📦 *CACHES*',
         `│ • DB files cached:    ${dbCacheSize}`,
-        `│ • Msg store (chats):  ${msgStoreSz}`,
+        `│ • Msg store (chats):  ${connStats?.messageStoreChats ?? 'n/a'}`,
         `│ • Session stored:     ${session.hasSession ? '✅' : '❌'}`,
         '│',
         `│ 💡 Run *.clearcache* to free RAM`,

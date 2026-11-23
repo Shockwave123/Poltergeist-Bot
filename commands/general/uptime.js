@@ -47,26 +47,32 @@ module.exports = {
   
   async execute(sock, msg, args, extra) {
     try {
-      // Get process uptime in seconds
-      const uptimeSeconds = process.uptime();
+      const stats = typeof sock.getConnectionStats === 'function'
+        ? sock.getConnectionStats()
+        : null;
+      const uptimeSeconds = stats?.uptimeSeconds ?? process.uptime();
       const uptime = formatUptime(uptimeSeconds);
-      
-// Get bot info
-const botName = config.botName || 'Bot';
-const botVersion = `V${packageInfo.version}`;
-      
-      // Build response message
-      let message = `╭━━『 *Bot Uptime* 』━━╮\n\n`;
-    message += `🤖 *Bot Name:* ${botName}\n`;
-    message += `🧬 *Bot Version:* ${botVersion}\n`;
-      message += `⏱️ *Uptime:* ${uptime}\n`;
-      message += `\n╰━━━━━━━━━━━━━━━╯`;
-      
-      await extra.reply(message);
-      
+      const botName = config.botName || 'Bot';
+      const botVersion = `V${packageInfo.version}`;
+      const connected = typeof stats?.connected === 'boolean'
+        ? stats.connected
+        : Boolean(sock?.user?.id);
+
+      const message = [
+        `╭━━『 *${botName} Uptime* 』━━╮`,
+        '',
+        `🧬 *Version:* ${botVersion}`,
+        `⏱️ *Uptime:* ${uptime}`,
+        `🔌 *WhatsApp:* ${connected ? 'Connected' : 'Disconnected / reconnecting'}`,
+        `🔄 *Reconnects:* ${stats?.reconnects ?? 'n/a'}`,
+        '',
+        '╰━━━━━━━━━━━━━━━╯'
+      ].join('\n');
+
+      return extra.reply(message);
     } catch (error) {
       console.error('Error in uptime command:', error);
-      await extra.reply('❌ An error occurred while fetching uptime information. Please try again later.');
+      return extra.reply(`❌ Could not fetch uptime information: ${error.message}`);
     }
   }
 };

@@ -7,7 +7,7 @@ const config = require('../../config');
 const { normalizeJidWithLid } = require('../../utils/jidHelper');
 const messageStore = require('../../utils/messageStore');
 
-const MEDIA_TYPES = ['imageMessage', 'videoMessage', 'audioMessage'];
+const MEDIA_TYPES = ['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage'];
 
 function unwrapMessage(message) {
   let content = message || {};
@@ -81,10 +81,10 @@ async function downloadViewOnceMedia(sock, targetMessage, downloader = downloadM
 
 module.exports = {
   name: 'viewonce',
-  aliases: ['readvo', 'vv', 'readviewonce', 'wow'],
+  aliases: ['readvo', 'vv', 'readviewonce', 'wow', 'view'],
   category: 'general',
   description: 'Reveal view-once messages and forward them to owner DM',
-  usage: '.viewonce (reply to view-once message)',
+  usage: '.viewonce (or .view once) (reply to view-once message)',
   getViewOnceMedia,
   getQuotedTargetMessage,
   downloadViewOnceMedia,

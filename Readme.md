@@ -24,7 +24,7 @@ $env:OWNER_NUMBER = "2348012345678"
 npm start
 ```
 
-Open the local setup page and enter any username plus the `SETUP_PASSWORD` when the browser prompts for HTTP Basic authentication. Use the QR code or request a pairing code, then confirm the link on the WhatsApp phone. The setup page and its QR, pairing, and refresh endpoints are protected; `/health` is intentionally public for monitoring.
+Open the local setup page and enter `SETUP_PASSWORD` in the Poltergeist admin login. A successful login creates a 12-hour, HTTP-only session cookie. Use the QR code or request a pairing code, then confirm the link on the WhatsApp phone. The connection page and its API are protected; `/health` is intentionally public for monitoring.
 
 ## Deploy on Render
 
@@ -32,13 +32,19 @@ Create a Web Service from this repository and configure these environment variab
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `SETUP_PASSWORD` | Yes | Protects the setup page and all pairing endpoints; use a unique secret of at least 16 characters. |
-| `OWNER_NUMBER` | Yes | Owner phone number with country code, digits only. |
-| `SESSION_ID` | Optional | Session credential when restoring a saved login. Treat it as a password. |
-| `SEND_WELCOME` | Optional | Set to `false` to disable the non-sensitive welcome message. |
-| `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `NVIDIA_NIM_API_KEY`, `ZAI_API_KEY` | Optional | AI provider credentials. Keep them in the host's secret-variable store. |
+| `SETUP_PASSWORD` | Yes | Admin login password; use a unique secret of at least 16 characters. |
+| `OWNER_NUMBER` | Yes | Your WhatsApp number with country code, digits only. Override the bundled fallback number. |
+| `OWNER_NAME` | Optional | Comma-separated owner display names. |
+| `SESSION_ID` | Optional | Session credential for restoring a login. Treat it as a password; a persistent disk is preferred. |
+| `SEND_WELCOME` | Optional | Set to `false` to disable the non-sensitive welcome message; default is enabled. |
+| `AUTO_RELINK` | Optional | Set to `false` to disable automatic relinking after logout; default is enabled. |
+| `GEMINI_API_KEY` / `GOOGLE_AI_API_KEY`, `OPENROUTER_API_KEY`, `NVIDIA_NIM_API_KEY` / `NVIDIA_API_KEY`, `ZAI_API_KEY` / `ZHIPUAI_API_KEY` | Optional | Configure one or more AI providers for AI and supported transcription features. |
+| `OPENAI_API_KEY` | Optional | OpenAI transcription fallback. |
+| `OPENWEATHER_API_KEY` | Optional | Enables the `.weather` command. |
+| `USER_KEYS_ENCRYPTION_KEY` | Optional | Stable encryption secret for per-user API keys saved with `.aikey set`. |
+| `NODE_ENV` | Blueprint default | The Render blueprint sets this to `production`. Render supplies `PORT` automatically. |
 
-Visit the service URL and enter the setup password to scan a QR code or request a pairing code. A persistent disk is recommended to preserve the complete Baileys auth state across redeploys. The free Render filesystem is ephemeral; an exported session credential is sensitive and should only be requested deliberately with the owner-only `.sessionid file` command in a private chat. The bot does not print credentials to logs or send them in its automatic welcome message.
+Runtime tuning variables such as `HEALTH_CHECK_INTERVAL_MS`, `MEMORY_LIMIT_MB`, `IDLE_PROBE_MS`, `QR_REFRESH_TIMEOUT_MS`, and `MAX_RECONNECT_DELAY_MS` have code defaults and normally do not need to be set. `BROWSER_TYPE` also defaults intentionally; do not set it to `ubuntu` for pairing. Visit the service URL and sign in to scan a QR code or request a pairing code. A persistent disk is recommended to preserve the complete Baileys auth state across redeploys. The free Render filesystem is ephemeral; an exported session credential is sensitive and should only be requested deliberately with the owner-only `.sessionid file` command in a private chat. The bot does not print credentials to logs or send them in its automatic welcome message.
 
 The public health endpoint is `https://YOUR-SERVICE.onrender.com/health`. Free Render services can still suspend; an uptime monitor cannot guarantee that a free instance stays online.
 

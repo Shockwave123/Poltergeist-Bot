@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#070a12">
+  <title>Poltergeist MD | Admin</title>
+  <link rel="stylesheet" href="/assets/admin.css">
+  <script src="/assets/admin.js" defer></script>
+</head>
+<body>
+  <div class="ambient ambient-cyan" aria-hidden="true"></div>
+  <div class="ambient ambient-violet" aria-hidden="true"></div>
+
+  <main id="login-screen" class="login-shell">
+    <section class="login-card">
+      <div class="login-art" aria-hidden="true">
+        <img src="/assets/bot_image.jpg" alt="">
+        <div class="art-caption">
+          <span class="eyebrow">POLTERGEIST // MD</span>
+          <span class="art-title">YOUR BOT.<br>YOUR CONTROL.</span>
+          <span class="art-subtitle">SECURE WHATSAPP LINKING CONSOLE</span>
+        </div>
+      </div>
+      <div class="login-form-wrap">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>POLTERGEIST <b>MD</b></span>
+          <span class="version-tag">ADMIN</span>
+        </div>
+        <p class="eyebrow accent">RESTRICTED ACCESS</p>
+        <h1>Welcome back<span class="accent">.</span></h1>
+        <p class="intro">Authenticate to manage your bot connection and pairing session.</p>
+
+        <form id="login-form" autocomplete="on">
+          <label for="admin-password">Admin password</label>
+          <div class="password-field">
+            <input id="admin-password" name="password" type="password" autocomplete="current-password"
+              placeholder="Enter your setup password" required>
+            <button id="toggle-password" class="icon-button" type="button" aria-label="Show password">SHOW</button>
+          </div>
+          <button id="login-button" class="button button-primary full-width" type="submit">
+            <span>Unlock control center</span><span aria-hidden="true">↗</span>
+          </button>
+          <p id="login-error" class="form-message" role="status" aria-live="polite"></p>
+        </form>
+
+        <div class="secure-note">
+          <span class="lock-icon" aria-hidden="true">◆</span>
+          <span>Protected admin session <b>·</b> Expires after 12 hours</span>
+        </div>
+      </div>
+    </section>
+    <footer class="page-footer">POLTERGEIST MD <span>•</span> PRIVATE CONTROL PLANE</footer>
+  </main>
+
+  <div id="dashboard" class="dashboard hidden">
+    <header class="topbar">
+      <a class="brand-lockup" href="/" aria-label="Poltergeist MD admin home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>POLTERGEIST <b>MD</b></span>
+      </a>
+      <div class="topbar-actions">
+        <span id="connection-pill" class="connection-pill"><i></i><span>CHECKING</span></span>
+        <button id="logout-button" class="button button-quiet" type="button">Sign out <span aria-hidden="true">↗</span></button>
+      </div>
+    </header>
+
+    <main class="dashboard-main">
+      <section class="welcome-row">
+        <div>
+          <p class="eyebrow accent">CONTROL CENTER <span class="slash">//</span> WHATSAPP LINK</p>
+          <h1>Connection <span class="accent">console</span></h1>
+          <p class="intro">Link your WhatsApp device and monitor the bot in real time.</p>
+        </div>
+        <div class="connection-state">
+          <span id="state-orb" class="state-orb"></span>
+          <div><span class="eyebrow">LIVE STATUS</span><strong id="state-label">Starting…</strong></div>
+        </div>
+      </section>
+
+      <section id="connection-banner" class="connection-banner state-wait" role="status" aria-live="polite">
+        <span class="banner-icon" aria-hidden="true">◈</span>
+        <div><strong id="banner-title">CONNECTING TO WHATSAPP</strong><span id="banner-detail">Waiting for connection details…</span></div>
+        <span id="last-updated" class="last-updated">Updating…</span>
+      </section>
+
+      <section class="connection-grid">
+        <article class="panel qr-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">METHOD 01</p><h2>Scan QR code</h2></div>
+            <span class="step-number">01</span>
+          </div>
+          <p class="panel-copy">On your phone, open <b>WhatsApp → Linked devices → Link a device</b>, then scan the current code.</p>
+          <div id="qr-frame" class="qr-frame">
+            <div id="qr-placeholder" class="qr-placeholder"><span class="loader-ring"></span><span>Waiting for a fresh QR code</span></div>
+            <img id="qr-image" class="qr-image hidden" alt="Current WhatsApp linking QR code">
+            <div class="qr-corner corner-tl"></div><div class="qr-corner corner-tr"></div>
+            <div class="qr-corner corner-bl"></div><div class="qr-corner corner-br"></div>
+          </div>
+          <div class="qr-footer">
+            <span id="qr-caption" class="muted">QR codes refresh automatically.</span>
+            <span id="qr-countdown" class="timer-chip">--:--</span>
+          </div>
+        </article>
+
+        <article class="panel pairing-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">METHOD 02</p><h2>Pair with phone</h2></div>
+            <span class="step-number">02</span>
+          </div>
+          <p class="panel-copy">Request a one-time code, then enter it in WhatsApp under <b>Linked devices → Link with phone number</b>.</p>
+          <form id="pair-form" class="pair-form">
+            <label for="phone-number">WhatsApp number with country code</label>
+            <div class="phone-field">
+              <span aria-hidden="true">+</span>
+              <input id="phone-number" name="phoneNumber" type="tel" inputmode="numeric" autocomplete="tel"
+                placeholder="2348012345678" pattern="[0-9]{8,15}" required>
+            </div>
+            <button id="pair-button" class="button button-primary full-width" type="submit">
+              <span>Generate pairing code</span><span aria-hidden="true">→</span>
+            </button>
+            <p id="pair-message" class="form-message" role="status" aria-live="polite"></p>
+          </form>
+          <div id="pair-code-card" class="pair-code-card hidden">
+            <span class="eyebrow">ENTER THIS CODE ON YOUR PHONE</span>
+            <strong id="pair-code" class="pair-code"></strong>
+            <span id="pair-code-countdown" class="muted">Expires in --</span>
+          </div>
+          <div class="pairing-note"><span aria-hidden="true">!</span><span>WhatsApp sends a device-link notification to the number you enter.</span></div>
+        </article>
+      </section>
+
+      <section class="bottom-grid">
+        <article class="panel telemetry-panel">
+          <div class="panel-heading compact-heading">
+            <div><p class="eyebrow">RUNTIME TELEMETRY</p><h2>Bot health</h2></div>
+            <span id="session-tag" class="session-tag">SESSION —</span>
+          </div>
+          <div class="metrics-grid">
+            <div class="metric"><span class="metric-icon cyan">◷</span><div><span class="metric-label">PROCESS UPTIME</span><strong id="uptime-value">—</strong></div></div>
+            <div class="metric"><span class="metric-icon violet">↻</span><div><span class="metric-label">RECONNECTS</span><strong id="reconnect-value">—</strong></div></div>
+            <div class="metric memory-metric">
+              <span class="metric-icon cyan">▤</span>
+              <div class="memory-content"><span class="metric-label">MEMORY USAGE</span><strong id="memory-value">—</strong><div class="memory-track"><span id="memory-fill"></span></div></div>
+            </div>
+            <div class="metric"><span class="metric-icon violet">⌁</span><div><span class="metric-label">AUTH METHOD</span><strong id="auth-value">—</strong></div></div>
+          </div>
+          <div class="runtime-detail"><span>STATUS</span><span id="status-value">Waiting for bot status…</span></div>
+          <div class="runtime-detail"><span>LAST DISCONNECT</span><span id="disconnect-value">—</span></div>
+        </article>
+
+        <aside class="panel account-panel">
+          <p class="eyebrow">LINKED DEVICE</p>
+          <div class="account-art"><img src="/assets/bot_image.jpg" alt="" loading="lazy"></div>
+          <span class="metric-label">WHATSAPP ACCOUNT</span>
+          <strong id="bot-number" class="account-number">Not linked</strong>
+          <p id="session-detail" class="muted">Your session status will appear here.</p>
+          <button id="refresh-button" class="button button-outline full-width" type="button">
+            <span>Request a fresh QR</span><span aria-hidden="true">↻</span>
+          </button>
+        </aside>
+      </section>
+
+      <footer class="dashboard-footer">
+        <span><i class="footer-dot"></i> PRIVATE ADMIN SESSION</span>
+        <span>NEVER SHARE YOUR QR OR PAIRING CODE</span>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

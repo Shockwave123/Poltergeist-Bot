@@ -26,12 +26,27 @@ const buildLocalStats = (sock) => {
   return {
     uptimeSeconds: Math.round(process.uptime()),
     connected: Boolean(sock?.ws && (typeof sock.ws.isOpen === 'boolean' ? sock.ws.isOpen : sock.ws.readyState === 1)),
+    linked: Boolean(sock?.user?.id),
+    status: 'Runtime telemetry unavailable',
     reconnects: 'n/a',
+    reconnectAttempts: 'n/a',
+    failedProbes: 'n/a',
     lastDisconnectReason: '',
+    lastSocketError: '',
     authMethod: sessionManager.getState().authMethod,
+    lastServerTrafficAgeSeconds: null,
+    totalMessagesSeen: 'n/a',
+    messageStoreChats: 'n/a',
     memoryMb: Math.round(usage.rss / (1024 * 1024)),
     heapUsedMb: Math.round(usage.heapUsed / (1024 * 1024)),
-    qrCount: 'n/a'
+    heapTotalMb: Math.round(usage.heapTotal / (1024 * 1024)),
+    externalMb: Math.round(usage.external / (1024 * 1024)),
+    memoryLimitMb: config.health.memoryLimitMb,
+    qrCount: 'n/a',
+    qrAgeSeconds: null,
+    nodeVersion: process.version,
+    platform: `${process.platform}/${process.arch}`,
+    telemetryAvailable: false
   };
 };
 
@@ -45,21 +60,30 @@ module.exports = {
 
   async execute(sock, msg, args, extra) {
     try {
-      let stats = buildLocalStats(sock);
-      try {
-        const index = require('../../index');
-        if (typeof index.connectionStats === 'function') stats = { ...stats, ...index.connectionStats() };
-      } catch (error) {
-        // Running without the main process stats - local stats are enough
-      }
+      const localStats = buildLocalStats(sock);
+      const runtimeStats = typeof sock.getConnectionStats === 'function'
+        ? sock.getConnectionStats()
+        : null;
+      const stats = runtimeStats
+        ? { ...localStats, ...runtimeStats, telemetryAvailable: true }
+        : localStats;
 
       const ai = getAiHealth();
       const session = sessionManager.getStatus();
-      const memoryLimit = config.health.memoryLimitMb;
+      const memoryLimit = stats.memoryLimitMb || config.health.memoryLimitMb;
       const memoryPercent = Math.round((stats.memoryMb / memoryLimit) * 100);
-
       const linkState = stats.linked ? '✅ linked' : '❌ not linked';
-      const socketState = stats.connected ? 'online' : 'offline';
+      const socketState = stats.connected ? 'connected' : 'disconnected';
+      const overallState = stats.connected && stats.linked
+        ? 'HEALTHY'
+        : stats.connected
+          ? 'PAIRING / NOT LINKED'
+          : stats.status?.toLowerCase().includes('reconnect')
+            ? 'RECONNECTING'
+            : 'DISCONNECTED';
+      const cpuUsage = process.cpuUsage();
+      const userCpuSeconds = (cpuUsage.user / 1_000_000).toFixed(1);
+      const systemCpuSeconds = (cpuUsage.system / 1_000_000).toFixed(1);
 
       const aiLine = ai.configured
         ? `${ai.totalKeys} key(s) - ${ai.entries.filter((entry) => entry.status === 'ready').length} ready, ${ai.entries.filter((entry) => entry.status === 'cooling-down').length} cooling down`
@@ -68,19 +92,34 @@ module.exports = {
       const lines = [
         '╭───『 🩺 *BOT HEALTH* 』───',
         '│',
+        `│ 🟢 *Overall:* ${overallState}`,
+        `│ • Runtime telemetry: ${stats.telemetryAvailable ? 'full' : 'local-only'}`,
+        `│ • Status: ${stats.status || 'unknown'}`,
+        '│',
         '│ 🔌 *CONNECTION*',
         `│ • State: ${linkState} (socket ${socketState})`,
         `│ • Linked via: *${stats.authMethod || 'unknown'}*`,
         `│ • Session stored: ${session.hasSession ? '✅ yes' : '❌ no'}`,
         `│ • Reconnects this run: ${stats.reconnects}`,
+        `│ • Reconnect attempts: ${stats.reconnectAttempts}`,
+        `│ • Failed probes: ${stats.failedProbes}`,
         `│ • Last disconnect: ${stats.lastDisconnectReason || 'none'}`,
+        `│ • Last socket error: ${stats.lastSocketError || 'none'}`,
+        `│ • Last server activity: ${Number.isFinite(stats.lastServerTrafficAgeSeconds) ? `${stats.lastServerTrafficAgeSeconds}s ago` : 'n/a'}`,
         `│ • QR codes generated: ${stats.qrCount}`,
+        `│ • Current QR age: ${Number.isFinite(stats.qrAgeSeconds) ? `${stats.qrAgeSeconds}s` : 'n/a'}`,
         '│',
         '│ ⚙️ *RUNTIME*',
         `│ • Version: ${config.botName} v${packageInfo.version}`,
+        `│ • Node.js: ${stats.nodeVersion}`,
+        `│ • Platform: ${stats.platform}`,
         `│ • Uptime: ${formatUptime(stats.uptimeSeconds)}`,
         `│ • RAM: ${stats.memoryMb} MB / ${memoryLimit} MB limit (${memoryPercent}%)`,
-        `│ • Heap used: ${stats.heapUsedMb} MB`,
+        `│ • Heap: ${stats.heapUsedMb} / ${stats.heapTotalMb} MB`,
+        `│ • External memory: ${stats.externalMb} MB`,
+        `│ • CPU time: ${userCpuSeconds}s user / ${systemCpuSeconds}s system`,
+        `│ • Messages seen: ${stats.totalMessagesSeen}`,
+        `│ • Message-store chats: ${stats.messageStoreChats}`,
         `│ • Databases cached: ${typeof database.getCacheSize === 'function' ? database.getCacheSize() : 'n/a'}`,
         '│',
         '│ 🤖 *AI PROVIDERS*',
@@ -104,6 +143,7 @@ module.exports = {
         '│ 🛡️ *SELF-HEALING*',
         `│ • Health check every ${Math.round(config.health.checkIntervalMs / 1000)}s`,
         `│ • Auto QR refresh after ${Math.round(config.health.qrRefreshTimeoutMs / 1000)}s`,
+        `│ • Maximum reconnect delay: ${Math.round(config.health.maxReconnectDelayMs / 1000)}s`,
         `│ • Auto re-link when logged out: ${config.autoRelinkOnLogout ? '✅ on' : '❌ off'}`,
         '│',
         '╰─────────────────────────────'

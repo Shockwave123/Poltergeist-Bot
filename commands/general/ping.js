@@ -2,6 +2,19 @@
  * Ping Command - Check bot response time + quick health snapshot
  */
 
+const config = require('../../config');
+
+function formatUptime(seconds) {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const parts = [];
+  if (days) parts.push(`${days}d`);
+  if (hours) parts.push(`${hours}h`);
+  if (minutes || !parts.length) parts.push(`${minutes}m`);
+  return parts.join(' ');
+}
+
 module.exports = {
   name: 'ping',
   aliases: ['p', 'latency'],
@@ -13,30 +26,33 @@ module.exports = {
     try {
       const start = Date.now();
       const sent = await extra.reply('🏓 Pinging...');
-      const rtt = Date.now() - start;
+      const responseMs = Date.now() - start;
+      if (!sent?.key) throw new Error('WhatsApp did not return the ping message key.');
+
+      const stats = typeof sock.getConnectionStats === 'function'
+        ? sock.getConnectionStats()
+        : {};
 
       const mem = process.memoryUsage();
       const ramMb = Math.round(mem.rss / (1024 * 1024));
       const heapMb = Math.round(mem.heapUsed / (1024 * 1024));
-
-      const uptimeSec = Math.round(process.uptime());
-      const d = Math.floor(uptimeSec / 86400);
-      const h = Math.floor((uptimeSec % 86400) / 3600);
-      const m = Math.floor((uptimeSec % 3600) / 60);
-      const uptime = d ? `${d}d ${h}h ${m}m` : h ? `${h}h ${m}m` : `${m}m`;
-
-      const ramBar = (() => {
-        const pct = Math.min(ramMb / 460, 1);
-        const filled = Math.round(pct * 10);
-        return '█'.repeat(filled) + '░'.repeat(10 - filled);
-      })();
+      const memoryLimitMb = stats.memoryLimitMb || config.health.memoryLimitMb;
+      const memoryPercent = Math.round((ramMb / memoryLimitMb) * 100);
+      const filled = Math.min(10, Math.round((ramMb / memoryLimitMb) * 10));
+      const ramBar = '█'.repeat(filled) + '░'.repeat(10 - filled);
+      const connected = typeof stats.connected === 'boolean'
+        ? stats.connected
+        : Boolean(sock.user?.id);
+      const uptimeSeconds = stats.uptimeSeconds || Math.round(process.uptime());
 
       const text = [
-        `🏓 *Pong!* — ${rtt}ms`,
-        ``,
-        `⏱️ *Uptime:* ${uptime}`,
-        `💾 *RAM:* ${ramMb} MB [${ramBar}] / 460 MB`,
-        `🧠 *Heap:* ${heapMb} MB`,
+        '🏓 *Pong!*',
+        `⚡ *Send response:* ${responseMs} ms`,
+        `🔌 *WhatsApp:* ${connected ? 'Connected' : 'Disconnected / reconnecting'}`,
+        `⏱️ *Uptime:* ${formatUptime(uptimeSeconds)}`,
+        `🔄 *Reconnects:* ${stats.reconnects ?? 'n/a'}`,
+        `💾 *RAM:* ${ramMb} / ${memoryLimitMb} MB (${memoryPercent}%) [${ramBar}]`,
+        `🧠 *Heap used:* ${heapMb} MB`
       ].join('\n');
 
       await sock.sendMessage(extra.from, {

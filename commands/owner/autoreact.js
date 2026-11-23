@@ -6,7 +6,7 @@ const { load, save } = require('../../utils/autoReact');
 
 module.exports = {
   name: 'autoreact',
-  aliases: ['ar'],
+  aliases: ['ar', 'areact'],
   category: 'owner',
   description: 'Configure automatic reactions to messages',
   usage: '.autoreact <on/off/set bot/set all>',

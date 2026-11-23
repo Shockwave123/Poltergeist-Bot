@@ -1,7 +1,7 @@
-import { downloadContentFromMessage } from '@whiskeysockets/baileys';
-import fs from 'fs';
-import path from 'path';
-import { exec } from 'child_process';
+const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const fs = require('fs');
+const path = require('path');
+const { exec } = require('child_process');
 const effectsMenu = '🎧 *Audio Effects* 🎧\n\n'
     + '• *bass*\n'
     + '• *blown*\n'
@@ -52,7 +52,7 @@ async function getAudio(message) {
     for await (const c of stream) chunks.push(c);
     return Buffer.concat(chunks);
 }
-export default {
+module.exports = {
     command: 'audiofx',
     aliases: ['bass', 'blown', 'deep', 'earrape', 'fast', 'fat', 'nightcore', 'reverse', 'robot', 'slow', 'chipmunk'],
     category: 'fun',

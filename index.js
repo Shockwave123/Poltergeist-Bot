@@ -92,7 +92,14 @@ const database = require('./database');
 const sessionManager = require('./utils/sessionManager');
 const store = require('./utils/messageStore');
 const { stopCleanup, cleanupOldFiles } = require('./utils/cleanup');
-const { isSetupPasswordConfigured, verifySetupPassword } = require('./utils/setupAuth');
+const {
+  SETUP_SESSION_TTL_MS,
+  isSetupPasswordConfigured,
+  verifySetupPasswordValue,
+  createSetupSession,
+  isValidSetupSession,
+  revokeSetupSession
+} = require('./utils/setupAuth');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -143,17 +150,26 @@ const connectionStats = () => ({
   socketOpenedAt,
   connected: Boolean(activeSocket && isSocketOpen(activeSocket)),
   linked: sessionManager.isLinkedCredsObject(activeAuthState?.creds),
+  status: setupStatus,
   reconnects: reconnectCount,
   reconnectAttempts,
+  failedProbes,
   lastDisconnectReason,
   lastSocketError,
   qrCount,
   qrAgeSeconds: latestQrIssuedAt ? Math.round((Date.now() - latestQrIssuedAt) / 1000) : null,
   authMethod,
   pendingPairingPhone,
+  lastServerTrafficAgeSeconds: Math.max(0, Math.round((Date.now() - lastServerTrafficAt) / 1000)),
   totalMessagesSeen,
+  messageStoreChats: store.messages.size,
+  memoryLimitMb: config.health.memoryLimitMb,
   memoryMb: Math.round(process.memoryUsage().rss / (1024 * 1024)),
-  heapUsedMb: Math.round(process.memoryUsage().heapUsed / (1024 * 1024))
+  heapUsedMb: Math.round(process.memoryUsage().heapUsed / (1024 * 1024)),
+  heapTotalMb: Math.round(process.memoryUsage().heapTotal / (1024 * 1024)),
+  externalMb: Math.round(process.memoryUsage().external / (1024 * 1024)),
+  nodeVersion: process.version,
+  platform: `${process.platform}/${process.arch}`
 });
 
 /** True when the socket's websocket is open (works across Baileys versions). */
@@ -175,300 +191,115 @@ const normalizePhoneNumber = (value) => {
   return phoneNumber;
 };
 
-const escapeHtml = (value) => String(value)
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#039;');
-
-const setupPage = () => `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(config.botName)} setup</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 680px; margin: 40px auto; padding: 0 20px; color: #17202a; }
-    main { border: 1px solid #d8dee4; border-radius: 10px; padding: 24px; }
-    img { display: block; width: min(100%, 360px); margin: 20px auto; border: 1px solid #d8dee4; border-radius: 8px; }
-    input, button { box-sizing: border-box; font: inherit; padding: 10px; }
-    input { width: 100%; margin: 8px 0; }
-    button { cursor: pointer; background: #1769aa; color: white; border: 0; border-radius: 6px; }
-    #result { margin-top: 16px; font-weight: 600; word-break: break-word; }
-    .muted { color: #5f6b76; }
-    .note { background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; padding: 10px; font-size: 0.92em; }
-    .ok { background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 8px; padding: 14px; }
-    .code { font-size: 2em; letter-spacing: 0.22em; font-weight: 700; color: #1b5e20; font-family: monospace; }
-    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-    .small { font-size: 0.86em; }
-    .banner { padding: 14px 16px; border-radius: 8px; font-size: 1.05em; margin: 12px 0 18px; border: 1px solid transparent; }
-    .banner strong { font-weight: 800; letter-spacing: 0.04em; }
-    .banner.okc { background: #e8f5e9; border-color: #a5d6a7; color: #1b5e20; }
-    .banner.waitc { background: #fff8e1; border-color: #ffe082; color: #7a5b00; }
-    .banner.downc { background: #ffebee; border-color: #ef9a9a; color: #b71c1c; }
-    .timer { font-weight: 800; font-size: 1.12em; font-family: monospace; padding: 8px 12px; border-radius: 6px; display: inline-block; margin: 6px 0; }
-    .timer.qrt { background: #e3f2fd; color: #0d47a1; border: 1px solid #90caf9; }
-    .timer.pt { background: #f3e5f5; color: #4a148c; border: 1px solid #ce93d8; }
-    .timer.done { background: #eceff1; color: #546e7a; border-color: #cfd8dc; font-weight: 600; }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>${escapeHtml(config.botName)} connection</h1>
-    <div id="conn-banner" class="banner waitc"><strong>⏳ CONNECTING...</strong> &mdash; fetching live status from the bot.</div>
-    <p class="muted">Choose one method to connect this deployment to WhatsApp. This page refreshes itself every few seconds.</p>
-
-    <h2>Option 1: QR code</h2>
-    <p>Open WhatsApp on your phone, go to Linked devices, choose Link a device, then scan the code below.</p>
-    <img id="qr" alt="WhatsApp QR code" src="${latestQrDataUrl || ''}" style="${latestQrDataUrl ? 'display:block' : 'display:none'}">
-    <p class="muted small" id="qr-info">Loading connection state...</p>
-    <div><span class="timer qrt" id="qr-timer">QR refresh in --</span></div>
-
-    <h2>Option 2: Pairing code</h2>
-    <p>Enter the WhatsApp number with country code, without <code>+</code>, spaces, or punctuation.</p>
-    <div><span class="timer pt" id="pair-timer">No pairing code active</span></div>
-    <p class="note">
-      After you click <strong>Generate pairing code</strong>, WhatsApp sends a <strong>device-link notification</strong>
-      to that phone number. Open WhatsApp on that phone, open Linked devices, choose
-      <strong>Link with phone number</strong> and enter the code shown below.
-    </p>
-    <form id="pair-form">
-      <input name="phoneNumber" inputmode="numeric" placeholder="e.g. 2348012345678" required pattern="[0-9]{8,15}">
-      <button type="submit">Generate pairing code</button>
-    </form>
-    <div id="result"></div>
-
-    <h2>Session id</h2>
-    <div id="session-box" class="ok" style="display:none">
-      <div class="small"><strong>Session stored.</strong> This page never displays the session credential.
-        The owner can request it with <code>sessionid file</code> in a private chat.</div>
-      <div style="margin-top:8px;font-family:monospace;word-break:break-all;" id="session-text"></div>
-    </div>
-    <p class="muted small" id="session-info">No session stored yet. Pair with a QR code or a pairing code to create one.</p>
-
-    <div class="row" style="margin-top:18px">
-      <button type="button" id="restart-btn" style="background:#5f6b76">Get a fresh QR code</button>
-    </div>
-    <p class="muted" id="status">Status: ${escapeHtml(setupStatus)}</p>
-  </main>
-  <script>
-    (function () {
-      var qrImg = document.getElementById('qr');
-      var qrInfo = document.getElementById('qr-info');
-      var statusEl = document.getElementById('status');
-      var sessionBox = document.getElementById('session-box');
-      var sessionText = document.getElementById('session-text');
-      var sessionInfo = document.getElementById('session-info');
-      var result = document.getElementById('result');
-      var pairTimer = null;
-
-      function esc(text) {
-        return String(text === undefined || text === null ? '' : text)
-          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      }
-
-      function showPairingCode(code, seconds, phone) {
-        var remaining = seconds > 0 ? seconds : 120;
-        result.innerHTML =
-          '<div class="ok">' +
-          '<div class="small">Device-link notification sent to <strong>' + esc(phone) + '</strong>. ' +
-          'Open WhatsApp &rarr; Linked devices &rarr; Link with phone number, then enter:</div>' +
-          '<div class="code" id="pairing-code">' + esc(code) + '</div>' +
-          '<div class="small muted" id="pairing-timer">Expires in ' + remaining + 's</div>' +
-          '</div>';
-        if (pairTimer) { clearInterval(pairTimer); }
-        pairTimer = setInterval(function () {
-          var timerEl = document.getElementById('pairing-timer');
-          if (!timerEl) { clearInterval(pairTimer); return; }
-          remaining -= 1;
-          if (remaining <= 0) {
-            timerEl.textContent = 'This code expired. Click Generate pairing code again.';
-            clearInterval(pairTimer);
-          } else {
-            timerEl.textContent = 'Expires in ' + remaining + 's';
-          }
-        }, 1000);
-      }
-
-      function render(data) {
-        if (!data) { return; }
-        statusEl.textContent = 'Status: ' + esc(data.status);
-
-        // 1) Bold live connection banner — always mirrors the bot's current state
-        var banner = document.getElementById('conn-banner');
-        if (banner) {
-          if (data.linked) {
-            banner.className = 'banner okc';
-            banner.innerHTML = '<strong>\u2705 CONNECTED</strong> &mdash; bot is linked' +
-              (data.botNumber ? ' as <strong>+' + esc(data.botNumber) + '</strong>' : '') +
-              ' and online.';
-          } else if (data.pairingActive) {
-            banner.className = 'banner waitc';
-            banner.innerHTML = '<strong>\u23F3 WAITING FOR PAIRING CODE</strong> &mdash; enter the code on your phone to finish linking.';
-          } else if (data.qr) {
-            banner.className = 'banner waitc';
-            banner.innerHTML = '<strong>\u23F3 WAITING FOR QR SCAN</strong> &mdash; scan the code below with your phone.';
-          } else if (data.connected) {
-            banner.className = 'banner waitc';
-            banner.innerHTML = '<strong>\u23F3 CONNECTING...</strong> &mdash; socket is open, waiting for WhatsApp to issue a code.';
-          } else {
-            banner.className = 'banner downc';
-            banner.innerHTML = '<strong>\u26D4 NOT CONNECTED</strong> &mdash; ' + esc(data.status || 'waiting for the bot...');
-          }
-        }
-
-        if (data.qr) {
-          if (qrImg.getAttribute('src') !== data.qr) { qrImg.setAttribute('src', data.qr); }
-          qrImg.style.display = 'block';
-        }
-        if (data.linked) {
-          qrInfo.textContent = 'Connected as ' + (data.botNumber || 'unknown') + '. The QR code is no longer needed.';
-        } else if (data.qr) {
-          qrInfo.textContent = 'Newest QR code generated ' + (data.qrAgeSeconds === null ? 'just now' : data.qrAgeSeconds + 's ago') +
-            '. Codes rotate automatically, so always scan the code currently shown.';
-        } else {
-          qrInfo.textContent = 'Waiting for a fresh QR code from WhatsApp...';
-        }
-
-        // 2a) Bold countdown timer for the QR code option
-        var qrTimer = document.getElementById('qr-timer');
-        if (qrTimer) {
-          if (data.linked) {
-            qrTimer.className = 'timer qrt done';
-            qrTimer.textContent = 'QR retired \u2014 bot is connected';
-          } else if (typeof data.qrRefreshSeconds === 'number') {
-            qrTimer.className = 'timer qrt';
-            qrTimer.textContent = 'QR refreshes in ' + data.qrRefreshSeconds + 's';
-          } else {
-            qrTimer.className = 'timer qrt done';
-            qrTimer.textContent = 'Preparing a fresh QR...';
-          }
-        }
-
-        // 2b) Bold countdown timer for the phone-number pairing option
-        var pairTimerEl = document.getElementById('pair-timer');
-        if (pairTimerEl) {
-          if (data.linked) {
-            pairTimerEl.className = 'timer pt done';
-            pairTimerEl.textContent = 'Pairing finished \u2014 bot is connected';
-          } else if (data.pairing && data.pairing.code) {
-            pairTimerEl.className = 'timer pt';
-            pairTimerEl.textContent = 'Code expires in ' + (data.pairing.expiresInSeconds || 0) + 's';
-          } else {
-            pairTimerEl.className = 'timer pt done';
-            pairTimerEl.textContent = 'No pairing code active';
-          }
-        }
-
-        // Smooth 1s local tick: remember server values so the countdowns
-        // move every second instead of every poll (3s).
-        qrCountdown = (typeof data.qrRefreshSeconds === 'number' && !data.linked)
-          ? data.qrRefreshSeconds : null;
-        pairCountdown = (data.linked || !data.pairing || !data.pairing.code)
-          ? null : (data.pairing.expiresInSeconds || 0);
-
-        if (data.sessionReady) {
-          sessionBox.style.display = 'block';
-          sessionText.textContent = 'Credential hidden';
-          sessionInfo.textContent = 'Keep the deployment setup password private. The owner can export the session with the owner-only session command.';
-        } else {
-          sessionBox.style.display = 'none';
-        }
-
-        if (data.pairing && data.pairing.code) {
-          showPairingCode(data.pairing.code, data.pairing.expiresInSeconds, data.pairing.phoneNumber);
-        }
-      }
-
-      async function refresh() {
-        try {
-          var response = await fetch('/api/status', { cache: 'no-store' });
-          render(await response.json());
-        } catch (error) {
-          qrInfo.textContent = 'Lost contact with the bot process. It may be restarting - retrying...';
-        }
-      }
-
-      document.getElementById('pair-form').addEventListener('submit', async function (event) {
-        event.preventDefault();
-        result.innerHTML = '<span class="muted">Requesting a pairing code, please wait...</span>';
-        var phoneNumber = new FormData(event.target).get('phoneNumber');
-        try {
-          var response = await fetch('/api/pair', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ phoneNumber: phoneNumber })
-          });
-          var data = await response.json();
-          if (data.error) {
-            result.innerHTML = '<span style="color:#c0392b">' + esc(data.error) + '</span>';
-            return;
-          }
-          showPairingCode(data.code, data.expiresInSeconds || 120, data.phoneNumber || phoneNumber);
-          refresh();
-        } catch (error) {
-          result.innerHTML = '<span style="color:#c0392b">Network error. Please try again.</span>';
-        }
-      });
-
-      document.getElementById('restart-btn').addEventListener('click', async function () {
-        qrInfo.textContent = 'Restarting the WhatsApp connection to fetch a fresh QR code...';
-        try {
-          await fetch('/api/refresh', { method: 'POST' });
-        } catch (error) { /* the poll below will show the result */ }
-        setTimeout(refresh, 2500);
-      });
-
-      refresh();
-      setInterval(refresh, 3000);
-
-      // Local 1s tick so both countdowns move smoothly between polls
-      var qrCountdown = null;
-      var pairCountdown = null;
-      setInterval(function () {
-        var qrEl = document.getElementById('qr-timer');
-        if (qrEl && qrCountdown !== null) {
-          qrCountdown = Math.max(0, qrCountdown - 1);
-          qrEl.textContent = qrCountdown > 0
-            ? 'QR refreshes in ' + qrCountdown + 's'
-            : 'Refreshing QR now...';
-        }
-        var ptEl = document.getElementById('pair-timer');
-        if (ptEl && pairCountdown !== null) {
-          pairCountdown = Math.max(0, pairCountdown - 1);
-          ptEl.textContent = pairCountdown > 0
-            ? 'Code expires in ' + pairCountdown + 's'
-            : 'Code expired \u2014 request a new one';
-          if (pairCountdown === 0) pairCountdown = null;
-        }
-      }, 1000);
-    })();
-  </script>
-</body>
-</html>`;
+const setupPage = () => fs.readFileSync(path.join(__dirname, 'web', 'admin.html'), 'utf8');
 
 const startSetupServer = () => {
   const setupPassword = process.env.SETUP_PASSWORD || '';
+  const sessionCookieName = 'poltergeist_admin_session';
+  const securityHeaders = {
+    'cache-control': 'no-store',
+    'content-security-policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'",
+    'referrer-policy': 'no-referrer',
+    'x-content-type-options': 'nosniff',
+    'x-frame-options': 'DENY'
+  };
+  const cookieValue = (request) => {
+    const cookieHeader = String(request.headers.cookie || '');
+    const entry = cookieHeader.split(';').map((part) => part.trim())
+      .find((part) => part.startsWith(`${sessionCookieName}=`));
+    return entry ? entry.slice(sessionCookieName.length + 1) : '';
+  };
+  const isSameOrigin = (request) => {
+    const origin = request.headers.origin;
+    if (!origin) return true;
+    try {
+      return new URL(origin).host === request.headers.host;
+    } catch (error) {
+      return false;
+    }
+  };
+  const sendJson = (response, status, payload, headers = {}) => {
+    response.writeHead(status, {
+      ...securityHeaders,
+      'content-type': 'application/json; charset=utf-8',
+      ...headers
+    });
+    response.end(JSON.stringify(payload));
+  };
+  const readJsonBody = async (request, maxBytes = 4096) => {
+    const declaredLength = Number(request.headers['content-length'] || 0);
+    if (declaredLength > maxBytes) {
+      request.resume();
+      const error = new Error('Request body is too large.');
+      error.statusCode = 413;
+      throw error;
+    }
+
+    const chunks = [];
+    let byteLength = 0;
+    let tooLarge = false;
+    for await (const chunk of request) {
+      byteLength += chunk.length;
+      if (byteLength > maxBytes) {
+        tooLarge = true;
+        chunks.length = 0;
+      } else if (!tooLarge) {
+        chunks.push(chunk);
+      }
+    }
+    if (tooLarge) {
+      const error = new Error('Request body is too large.');
+      error.statusCode = 413;
+      throw error;
+    }
+    try {
+      const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Expected a JSON object.');
+      }
+      return parsed;
+    } catch (error) {
+      const invalid = new Error('Invalid JSON request body.');
+      invalid.statusCode = 400;
+      throw invalid;
+    }
+  };
+  const setSessionCookie = (request, response, token) => {
+    const forwardedProtocol = String(request.headers['x-forwarded-proto'] || '')
+      .split(',')[0].trim().toLowerCase();
+    const secure = Boolean(request.socket.encrypted) || forwardedProtocol === 'https';
+    const attributes = [
+      `${sessionCookieName}=${token}`,
+      'Path=/',
+      'HttpOnly',
+      'SameSite=Strict',
+      `Max-Age=${token ? Math.floor(SETUP_SESSION_TTL_MS / 1000) : 0}`
+    ];
+    if (secure) attributes.push('Secure');
+    response.setHeader('set-cookie', attributes.join('; '));
+  };
+
   if (!isSetupPasswordConfigured(setupPassword)) {
-    console.error('[setup] SETUP_PASSWORD is missing or shorter than 16 characters; the web setup and pairing endpoints are disabled.');
+    console.error('[setup] SETUP_PASSWORD is missing or shorter than 16 characters; admin login and pairing endpoints are disabled.');
   }
 
   const server = http.createServer(async (request, response) => {
     const url = (request.url || '/').split('?')[0];
+    const method = request.method || 'GET';
+    const sendText = (status, text, contentType = 'text/plain; charset=utf-8') => {
+      response.writeHead(status, { ...securityHeaders, 'content-type': contentType });
+      response.end(text);
+    };
 
     // Uptime monitors & cron jobs (cron-job.org, UptimeRobot etc.) can hit either endpoint
-    if ((request.method === 'GET' || request.method === 'HEAD') && (url === '/health' || url === '/ping' || url === '/keepalive' || url === '/keep-alive')) {
-      response.writeHead(200, {
-        'content-type': 'application/json',
-        'cache-control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
-      });
-      if (request.method === 'HEAD') {
+    if ((method === 'GET' || method === 'HEAD') && (url === '/health' || url === '/ping' || url === '/keepalive' || url === '/keep-alive')) {
+      if (method === 'HEAD') {
+        response.writeHead(200, securityHeaders);
         response.end();
         return;
       }
       const stats = connectionStats();
-      response.end(JSON.stringify({
+      sendJson(response, 200, {
         ok: true,
         status: setupStatus,
         connected: stats.connected,
@@ -479,31 +310,112 @@ const startSetupServer = () => {
         memoryMb: stats.memoryMb,
         qrAvailable: Boolean(latestQrDataUrl),
         sessionStored: sessionManager.getStatus().hasSession
-      }));
+      });
       return;
     }
 
-    if (url === '/' || url.startsWith('/api/')) {
-      const passwordConfigured = isSetupPasswordConfigured(setupPassword);
-      if (!passwordConfigured || !verifySetupPassword(request.headers.authorization, setupPassword)) {
-        const status = passwordConfigured ? 401 : 503;
-        response.writeHead(status, {
-          'content-type': 'text/plain; charset=utf-8',
-          'cache-control': 'no-store',
-          ...(passwordConfigured ? { 'www-authenticate': 'Basic realm="Poltergeist setup"' } : {})
+    const assets = {
+      '/assets/admin.css': ['admin.css', 'text/css; charset=utf-8'],
+      '/assets/admin.js': ['admin.js', 'text/javascript; charset=utf-8'],
+      '/assets/bot_image.jpg': [path.join('..', 'utils', 'bot_image.jpg'), 'image/jpeg']
+    };
+    if ((method === 'GET' || method === 'HEAD') && assets[url]) {
+      try {
+        const [fileName, contentType] = assets[url];
+        const filePath = path.join(__dirname, 'web', fileName);
+        const asset = fs.readFileSync(filePath);
+        response.writeHead(200, {
+          ...securityHeaders,
+          'content-type': contentType,
+          'content-length': asset.length
         });
-        response.end(passwordConfigured
-          ? 'Authentication required.'
-          : 'Setup is disabled. Configure SETUP_PASSWORD with at least 16 characters.');
+        response.end(method === 'HEAD' ? undefined : asset);
+      } catch (error) {
+        console.error(`[setup] could not serve ${url}:`, error.message);
+        sendText(500, 'Unable to load the admin page asset.');
+      }
+      return;
+    }
+
+    if ((method === 'GET' || method === 'HEAD') && url === '/') {
+      try {
+        const page = setupPage();
+        response.writeHead(200, {
+          ...securityHeaders,
+          'content-type': 'text/html; charset=utf-8',
+          'content-length': Buffer.byteLength(page)
+        });
+        response.end(method === 'HEAD' ? undefined : page);
+      } catch (error) {
+        console.error('[setup] could not load admin page:', error.message);
+        sendText(500, 'Unable to load the admin page.');
+      }
+      return;
+    }
+
+    if (url === '/api/session' && method === 'GET') {
+      sendJson(response, 200, {
+        configured: isSetupPasswordConfigured(setupPassword),
+        authenticated: isValidSetupSession(cookieValue(request))
+      });
+      return;
+    }
+
+    if (url === '/api/login' && method === 'POST') {
+      if (!isSameOrigin(request)) {
+        sendJson(response, 403, { error: 'Login requests must come from this site.' });
+        return;
+      }
+      if (!isSetupPasswordConfigured(setupPassword)) {
+        sendJson(response, 503, { error: 'Admin login is disabled. Configure SETUP_PASSWORD with at least 16 characters.' });
+        return;
+      }
+      try {
+        const body = await readJsonBody(request);
+        if (!verifySetupPasswordValue(body.password, setupPassword)) {
+          sendJson(response, 401, { error: 'Incorrect admin password.' });
+          return;
+        }
+        const token = createSetupSession();
+        setSessionCookie(request, response, token);
+        sendJson(response, 200, { ok: true });
+      } catch (error) {
+        sendJson(response, error.statusCode || 400, { error: error.message });
+      }
+      return;
+    }
+
+    if (url === '/api/logout' && method === 'POST') {
+      if (!isSameOrigin(request)) {
+        sendJson(response, 403, { error: 'Logout requests must come from this site.' });
+        return;
+      }
+      revokeSetupSession(cookieValue(request));
+      setSessionCookie(request, response, '');
+      sendJson(response, 200, { ok: true });
+      return;
+    }
+
+    if (url.startsWith('/api/')) {
+      if (!isSetupPasswordConfigured(setupPassword)) {
+        sendJson(response, 503, { error: 'Admin endpoints are disabled. Configure SETUP_PASSWORD with at least 16 characters.' });
+        return;
+      }
+      if (!isValidSetupSession(cookieValue(request))) {
+        sendJson(response, 401, { error: 'Admin session required.' });
+        return;
+      }
+      if (method === 'POST' && !isSameOrigin(request)) {
+        sendJson(response, 403, { error: 'Requests must come from this site.' });
         return;
       }
     }
 
-    if (request.method === 'GET' && url === '/api/status') {
+    if (method === 'GET' && url === '/api/status') {
       const session = sessionManager.getStatus();
       const pairingActive = Boolean(latestPairingCode) && (Date.now() - pairingCodeIssuedAt) < PAIRING_CODE_TTL_MS;
-      response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-      response.end(JSON.stringify({
+      const stats = connectionStats();
+      sendJson(response, 200, {
         status: setupStatus,
         qr: latestQrDataUrl,
         qrAgeSeconds: latestQrIssuedAt ? Math.round((Date.now() - latestQrIssuedAt) / 1000) : null,
@@ -519,6 +431,11 @@ const startSetupServer = () => {
         botNumber: activeSocket?.user?.id ? activeSocket.user.id.split(':')[0].split('@')[0] : null,
         authMethod,
         sessionReady: session.hasSession,
+        reconnects: stats.reconnects,
+        uptimeSeconds: stats.uptimeSeconds,
+        memoryMb: stats.memoryMb,
+        memoryLimitMb: stats.memoryLimitMb,
+        lastDisconnectReason: stats.lastDisconnectReason,
         // Countdown data for the phone-number pairing timer
         pairingActive,
         pairing: pairingActive ? {
@@ -527,71 +444,40 @@ const startSetupServer = () => {
           issuedAt: pairingCodeIssuedAt,
           expiresInSeconds: Math.max(0, Math.round((PAIRING_CODE_TTL_MS - (Date.now() - pairingCodeIssuedAt)) / 1000))
         } : null
-      }));
-      return;
-    }
-
-    if ((request.method === 'GET' || request.method === 'HEAD') && url === '/') {
-      if (request.method === 'HEAD') {
-        response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-        response.end();
-        return;
-      }
-      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-      response.end(setupPage());
+      });
       return;
     }
 
     // Ask for a brand new QR code without redeploying
-    if (request.method === 'POST' && url === '/api/refresh') {
-      const respond = (status, payload) => {
-        response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-        response.end(JSON.stringify(payload));
-      };
+    if (method === 'POST' && url === '/api/refresh') {
       if (isSocketOpen(activeSocket) && sessionManager.isLinkedCredsObject(activeAuthState?.creds)) {
-        respond(409, { error: 'The bot is already connected, so there is no QR code to refresh.' });
+        sendJson(response, 409, { error: 'The bot is already connected, so there is no QR code to refresh.' });
         return;
       }
       if (Date.now() - lastRefreshRequestAt < 20000) {
-        respond(429, { error: 'A refresh was requested moments ago. Please wait a few seconds.' });
+        sendJson(response, 429, { error: 'A refresh was requested moments ago. Please wait a few seconds.' });
         return;
       }
       lastRefreshRequestAt = Date.now();
-      respond(200, { ok: true, message: 'Restarting the WhatsApp connection for a fresh QR code.' });
+      sendJson(response, 200, { ok: true, message: 'Restarting the WhatsApp connection for a fresh QR code.' });
       setTimeout(() => {
         restartSocket('setup-refresh').catch((error) => console.error('[refresh] failed:', error?.message || error));
       }, 50);
       return;
     }
 
-    if (request.method === 'POST' && url === '/api/pair') {
-      let body = '';
-      request.on('data', (chunk) => {
-        body += chunk;
-        if (body.length > 2000) request.destroy();
-      });
-      request.on('end', async () => {
-        let result = null;
-        let failure = null;
-        try {
-          const phoneNumber = JSON.parse(body || '{}').phoneNumber;
-          result = await requestPairingCodeFor(phoneNumber);
-        } catch (error) {
-          failure = error;
-        }
-        if (failure) {
-          response.writeHead(400, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-          response.end(JSON.stringify({ error: failure.message || 'Unable to generate a pairing code.' }));
-          return;
-        }
-        response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-        response.end(JSON.stringify(result));
-      });
+    if (method === 'POST' && url === '/api/pair') {
+      try {
+        const body = await readJsonBody(request, 2000);
+        const result = await requestPairingCodeFor(body.phoneNumber);
+        sendJson(response, 200, result);
+      } catch (error) {
+        sendJson(response, error.statusCode || 400, { error: error.message || 'Unable to generate a pairing code.' });
+      }
       return;
     }
 
-    response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-    response.end('Not found');
+    sendText(404, 'Not found');
   });
 
   server.on('error', (error) => {
@@ -1220,6 +1106,7 @@ async function startBot(reason = 'startup') {
 
     const generation = ++socketGeneration;
     sock.__generation = generation;
+    sock.getConnectionStats = connectionStats;
     activeSocket = sock;
     activeAuthState = state;
     socketCreatedAt = Date.now();
@@ -1412,7 +1299,28 @@ async function startBot(reason = 'startup') {
           return;
         }
 
-        setupStatus = `Connection closed (${statusCode || 'unknown'}). Reconnecting...`;
+        if (statusCode === DisconnectReason.restartRequired) {
+          try {
+            await saveCreds();
+            const linked = sessionManager.isLinkedCredsObject(state.creds);
+            const sessionId = linked ? persistSession('restart-required') : null;
+            setupStatus = linked
+              ? 'WhatsApp requested a connection restart after linking. Reconnecting...'
+              : 'WhatsApp requested a connection restart. Reconnecting...';
+            console.log(
+              `[socket] restart-required: saved auth credentials (linked=${linked}, sessionIdPersisted=${Boolean(sessionId)})`
+            );
+            if (linked && !sessionId) {
+              console.error('[socket] linked credentials were saved, but the session backup was not persisted.');
+            }
+          } catch (error) {
+            console.error('[socket] could not save credentials before restart-required reconnect:', error?.message || error);
+          }
+        }
+
+        if (statusCode !== DisconnectReason.restartRequired) {
+          setupStatus = `Connection closed (${statusCode || 'unknown'}). Reconnecting...`;
+        }
         const errorName = lastDisconnect?.error?.name;
         console.warn(`⚠️ Connection closed (${statusCode || 'unknown'})${errorName ? ` ${errorName}` : ''}: ${errorMessage}. Reconnecting...`);
         scheduleReconnect(`close-${statusCode || 'unknown'}`, 2000);

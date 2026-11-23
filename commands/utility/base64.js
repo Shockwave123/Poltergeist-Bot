@@ -1,4 +1,4 @@
-export default {
+module.exports = {
     command: 'base64',
     aliases: ['b64', 'encode'],
     category: 'utility',
