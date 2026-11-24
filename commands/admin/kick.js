@@ -4,7 +4,7 @@
  * Includes robust self-kick prevention for PN/LID IDs
  */
 
-const config = require('../../config');
+const { findParticipant } = require('../../utils/jidHelper');
 
 module.exports = {
   name: 'kick',
@@ -33,78 +33,55 @@ module.exports = {
         return extra.reply('👤 Mention or reply to the user you want to kick.');
       }
       
-      const botId = sock.user?.id || '';
-      const botLid = sock.user?.lid || '';
-      const botPhoneNumber = botId.includes(':') ? botId.split(':')[0] : (botId.includes('@') ? botId.split('@')[0] : botId);
-      const botIdFormatted = botPhoneNumber + '@s.whatsapp.net';
-      const botLidNumeric = botLid.includes(':') ? botLid.split(':')[0] : (botLid.includes('@') ? botLid.split('@')[0] : botLid);
-      const botLidWithoutSuffix = botLid.includes('@') ? botLid.split('@')[0] : botLid;
-      
       const metadata = await sock.groupMetadata(chatId);
-      const participants = metadata.participants || [];
-      
-      const isTryingToKickBot = usersToKick.some((userId) => {
-        const userPhoneNumber = userId.includes(':') ? userId.split(':')[0] : (userId.includes('@') ? userId.split('@')[0] : userId);
-        const userLidNumeric = userId.includes('@lid') ? userId.split('@')[0].split(':')[0] : '';
-        
-        const directMatch = (
-          userId === botId ||
-          userId === botLid ||
-          userId === botIdFormatted ||
-          userPhoneNumber === botPhoneNumber ||
-          (userLidNumeric && botLidNumeric && userLidNumeric === botLidNumeric)
-        );
-        
-        if (directMatch) return true;
-        
-        const participantMatch = participants.some((p) => {
-          const pPhoneNumber = p.phoneNumber ? p.phoneNumber.split('@')[0] : '';
-          const pId = p.id ? p.id.split('@')[0] : '';
-          const pLid = p.lid ? p.lid.split('@')[0] : '';
-          const pFullId = p.id || '';
-          const pFullLid = p.lid || '';
-          const pLidNumeric = pLid.includes(':') ? pLid.split(':')[0] : pLid;
-          
-          const isThisParticipantBot = (
-            pFullId === botId ||
-            pFullLid === botLid ||
-            pLidNumeric === botLidNumeric ||
-            pPhoneNumber === botPhoneNumber ||
-            pId === botPhoneNumber ||
-            p.phoneNumber === botIdFormatted ||
-            (botLid && pLid && botLidWithoutSuffix === pLid)
-          );
-          
-          if (!isThisParticipantBot) return false;
-          
-          return (
-            userId === pFullId ||
-            userId === pFullLid ||
-            userPhoneNumber === pPhoneNumber ||
-            userPhoneNumber === pId ||
-            userId === p.phoneNumber ||
-            (pLid && userLidNumeric && userLidNumeric === pLidNumeric) ||
-            (userLidNumeric && pLidNumeric && userLidNumeric === pLidNumeric)
-          );
-        });
-        
-        return participantMatch;
-      });
-      
-      if (isTryingToKickBot) {
+      const participants = metadata?.participants || [];
+      const targetParticipants = usersToKick.map((userId) =>
+        findParticipant(participants, userId)
+      );
+      if (targetParticipants.some((participant) => !participant)) {
+        return extra.reply('❌ One or more mentioned/replied users could not be found in this group.');
+      }
+      const uniqueTargetParticipants = [...new Set(targetParticipants)];
+
+      const botParticipant = findParticipant(
+        participants,
+        [sock.user?.id, sock.user?.lid].filter(Boolean)
+      );
+      if (botParticipant && uniqueTargetParticipants.includes(botParticipant)) {
         await extra.reply('❌ Cannot kick myself!');
         return;
       }
-      
-      await sock.groupParticipantsUpdate(chatId, usersToKick, 'remove');
-      
-      const usernames = usersToKick.map((jid) => `@${jid.split('@')[0]}`);
+
+      const participantJids = [...new Set(uniqueTargetParticipants.map((participant) =>
+        participant.id || participant.jid || participant.userJid || participant.lid
+      ).filter(Boolean))];
+      if (participantJids.length !== uniqueTargetParticipants.length) {
+        return extra.reply('❌ Could not resolve a group JID for every user to kick.');
+      }
+
+      const results = await sock.groupParticipantsUpdate(chatId, participantJids, 'remove');
+      const failures = participantJids.map((jid) => ({
+        jid,
+        result: Array.isArray(results) ? results.find((entry) => entry.jid === jid) : null
+      })).filter(({ result }) => !result || String(result.status) !== '200');
+      if (failures.length) {
+        const details = failures.map(({ jid, result }) =>
+          `@${jid.split('@')[0]}${result?.status ? ` (status ${result.status})` : ''}`
+        );
+        return extra.reply(
+          `❌ WhatsApp refused to remove: ${details.join(', ')}. Make sure the bot is an admin and the target can be removed.`
+        );
+      }
+
+      const usernames = participantJids.map((jid) => `@${jid.split('@')[0]}`);
       const text = `✅ ${usernames.join(', ')} has been kicked successfully.`;
-      
-      await sock.sendMessage(extra.from, { text, mentions: usersToKick }, { quoted: msg });
+
+      await sock.sendMessage(extra.from, { text, mentions: participantJids }, { quoted: msg });
     } catch (error) {
       console.error('Kick command error:', error);
-      await extra.reply('❌ Failed to kick user(s). Make sure I am admin.');
+      await extra.reply(
+        `❌ Failed to kick user(s): ${error.message || 'Unknown error'}. Make sure I am admin and the target can be removed.`
+      );
     }
   },
 };

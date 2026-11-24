@@ -50,7 +50,10 @@ module.exports = {
       const normalized = normalizePersonalityInput(requested);
       if (['cycle', 'auto', 'automatic'].includes(normalized)) {
         autoChat.setPersonality('cycle');
-        return extra.reply('*Auto-chat personality set to automatic cycle through all 11 personalities.*');
+        return extra.reply(
+          '*Auto-chat personality set to automatic cycle through all 11 personalities.*\n' +
+          'This only changes the reply style. Use `.autochat on` in the chat to start replies; a non-owner must then send a normal message.'
+        );
       }
 
       const selected = findPersonality(requested)
@@ -64,7 +67,10 @@ module.exports = {
         );
       }
       autoChat.setPersonality(selected.id);
-      return extra.reply(`*Auto-chat personality set to ${selected.name}.*`);
+      return extra.reply(
+        `*Auto-chat personality set to ${selected.name}.*\n` +
+        'This only changes the reply style. Use `.autochat on` in the chat to start replies; a non-owner must then send a normal message.'
+      );
     }
 
     if (!option) {

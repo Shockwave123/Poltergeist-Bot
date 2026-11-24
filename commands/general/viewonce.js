@@ -54,9 +54,13 @@ function getViewOnceMedia(quotedMessage) {
 }
 
 async function getQuotedTargetMessage(chatId, contextInfo) {
+  if (!contextInfo?.stanzaId) return null;
+
   // First try to load from message store (cached)
   const cachedMessage = await messageStore.loadMessage(chatId, contextInfo.stanzaId);
   if (cachedMessage) return cachedMessage;
+
+  if (!contextInfo.quotedMessage) return null;
 
   // If not cached, return the quoted message from contextInfo
   // This is the message that was quoted/replied to
@@ -101,7 +105,7 @@ module.exports = {
         || currentMessage.buttonsResponseMessage?.contextInfo
         || currentMessage.listResponseMessage?.contextInfo;
 
-      if (!ctx?.quotedMessage || !ctx?.stanzaId) {
+      if (!ctx?.stanzaId) {
         return await sock.sendMessage(
           chatId,
           { text: '🗑️ Reply to a *view-once* message to reveal it.' },
@@ -110,6 +114,13 @@ module.exports = {
       }
 
       const targetMessage = await getQuotedTargetMessage(chatId, ctx);
+      if (!targetMessage?.message) {
+        return await sock.sendMessage(
+          chatId,
+          { text: '❌ I could not retrieve that replied-to message. Try again while it is still in recent chat history.' },
+          { quoted: msg }
+        );
+      }
       const mediaInfo = getViewOnceMedia(targetMessage.message);
       if (!mediaInfo) {
         return await sock.sendMessage(

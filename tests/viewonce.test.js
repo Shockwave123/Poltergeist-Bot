@@ -105,7 +105,49 @@ async function testQuotedTargetPrefersCachedOriginal() {
   assert.equal(fallback.message, contextInfo.quotedMessage);
 }
 
-Promise.all([testDownloadUsesReuploadCallback(), testQuotedTargetPrefersCachedOriginal()])
+async function testCachedQuotedTargetWithoutEmbeddedQuote() {
+  const cachedMessage = {
+    key: { remoteJid: 'cached-chat@g.us', id: 'cached-view-once-id' },
+    message: { imageMessage: { viewOnce: true, mediaKey: Buffer.from('cached-key') } }
+  };
+  messageStore.add(cachedMessage);
+  const contextInfo = { stanzaId: 'cached-view-once-id' };
+
+  assert.equal(
+    await viewOnce.getQuotedTargetMessage('cached-chat@g.us', contextInfo),
+    cachedMessage
+  );
+  assert.deepEqual(
+    viewOnce.getViewOnceMedia(
+      (await viewOnce.getQuotedTargetMessage('cached-chat@g.us', contextInfo)).message
+    ),
+    { messageType: 'imageMessage', message: cachedMessage.message }
+  );
+
+  const cachedOrdinaryMessage = {
+    key: { remoteJid: 'cached-chat@g.us', id: 'cached-ordinary-id' },
+    message: { conversation: 'ordinary message' }
+  };
+  messageStore.add(cachedOrdinaryMessage);
+  const sent = [];
+  await viewOnce.execute({
+    sendMessage: async (...args) => sent.push(args)
+  }, {
+    key: { remoteJid: 'cached-chat@g.us', id: 'command-id' },
+    message: {
+      extendedTextMessage: {
+        contextInfo: { stanzaId: 'cached-ordinary-id' }
+      }
+    }
+  }, []);
+  assert.equal(sent[0][1].text, '❌ This is not a view-once message!');
+}
+
+Promise.all([
+  testDownloadUsesReuploadCallback(),
+  testQuotedTargetPrefersCachedOriginal(),
+  testCachedQuotedTargetWithoutEmbeddedQuote()
+])
   .then(() => console.log('View-once parsing, cached-message recovery, and alias tests passed.'))
   .catch((error) => {
     console.error(error);

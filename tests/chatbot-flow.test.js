@@ -113,10 +113,25 @@ async function run() {
       reply
     });
     assert.equal(autoChat.getPersonality(), 'nonchalant');
+    assert.equal(autoChat.getActiveChat(), null);
+
+    await autoChatCommand.execute(sock, {}, ['on'], {
+      from: 'autochat-personality-test@g.us',
+      reply
+    });
+    assert.equal(autoChat.getActiveChat(), 'autochat-personality-test@g.us');
     await handleContinuousChat(sock, {
       key: { remoteJid: 'autochat-personality-test@g.us', participant: 'user@s.whatsapp.net' }
     }, 'hello', 'autochat-personality-test@g.us');
     assert.ok(prompts.at(-1).includes('Personality: Be an unbothered, dry, low-energy friend'));
+
+    let autoChatConfirmation = '';
+    await autoChatCommand.execute(sock, {}, ['personality', 'cycle'], {
+      from: 'autochat-personality-owner@g.us',
+      reply: async (text) => { autoChatConfirmation = text; }
+    });
+    assert.match(autoChatConfirmation, /Use `\.autochat on`/);
+    assert.equal(autoChat.getActiveChat(), 'autochat-personality-test@g.us');
 
     await new Promise((resolve) => setTimeout(resolve, 300));
     const persistedState = JSON.parse(fs.readFileSync(statePath, 'utf8'));
