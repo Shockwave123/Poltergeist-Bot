@@ -137,6 +137,7 @@
       ? `${memory} / ${memoryLimit} MB · ${memoryPercent}%`
       : 'Unavailable';
     document.getElementById('memory-fill').style.width = `${memoryPercent}%`;
+    document.getElementById('memory-fill').setAttribute('aria-valuenow', memoryPercent);
     document.getElementById('last-updated').textContent = `UPDATED ${new Date().toLocaleTimeString()}`;
     document.getElementById('qr-countdown').textContent = timers.qr === null ? '--:--' : formatCountdown(timers.qr);
   }
@@ -167,6 +168,12 @@
     event.preventDefault();
     loginError.textContent = '';
     loginError.classList.remove('success');
+    // Client-side validation
+    if (!passwordInput.value || passwordInput.value.length < 16) {
+      loginError.textContent = 'Password must be at least 16 characters.';
+      passwordInput.focus();
+      return;
+    }
     loginButton.disabled = true;
     loginButton.querySelector('span').textContent = 'Authenticating…';
     try {
@@ -192,14 +199,23 @@
     passwordInput.type = showing ? 'password' : 'text';
     button.textContent = showing ? 'SHOW' : 'HIDE';
     button.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    button.setAttribute('aria-pressed', showing ? 'false' : 'true');
   });
 
   pairForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     pairMessage.textContent = '';
+    pairMessage.classList.remove('success');
+    const phoneInput = document.getElementById('phone-number');
+    const phoneNumber = phoneInput.value.replace(/\D/g, '');
+    // Client-side validation
+    if (!phoneNumber || phoneNumber.length < 8 || phoneNumber.length > 15) {
+      pairMessage.textContent = 'Enter a valid phone number (8-15 digits with country code).';
+      phoneInput.focus();
+      return;
+    }
     pairButton.disabled = true;
     pairButton.querySelector('span').textContent = 'Requesting code…';
-    const phoneNumber = document.getElementById('phone-number').value.replace(/\D/g, '');
     try {
       const result = await api('/api/pair', {
         method: 'POST',
@@ -210,6 +226,7 @@
       document.getElementById('pair-code-countdown').textContent = `Expires in ${result.expiresInSeconds || 120}s`;
       pairCodeCard.classList.remove('hidden');
       pairMessage.textContent = `Device-link notification sent to +${result.phoneNumber || phoneNumber}.`;
+      pairMessage.classList.add('success');
       timers.pairing = Number(result.expiresInSeconds) || 120;
       await pollStatus();
     } catch (error) {
@@ -226,6 +243,7 @@
     try {
       const result = await api('/api/refresh', { method: 'POST' });
       pairMessage.textContent = result.message || 'Requesting a fresh QR code…';
+      pairMessage.classList.remove('success');
       window.setTimeout(pollStatus, 1800);
     } catch (error) {
       pairMessage.textContent = error.message;

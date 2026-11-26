@@ -10,10 +10,11 @@ const { toPTT } = require('../../utils/converter');
 function unwrapMessage(message) {
   let content = message || {};
   for (let depth = 0; depth < 5; depth += 1) {
-    const inner = content.ephemeralMessage?.message ||
-      content.viewOnceMessage?.message ||
-      content.viewOnceMessageV2?.message ||
-      content.documentWithCaptionMessage?.message;
+    const inner = content.ephemeralMessage?.message
+      || content.viewOnceMessage?.message
+      || content.viewOnceMessageV2?.message
+      || content.viewOnceMessageV2Extension?.message
+      || content.documentWithCaptionMessage?.message;
     if (!inner) break;
     content = inner;
   }

@@ -54,15 +54,16 @@ const getAntibadwordSticker = async (groupSettings) => {
 // Unwrap WhatsApp containers (ephemeral, view once, etc.)
 const getMessageContent = (msg) => {
   if (!msg || !msg.message) return null;
-  
+
   let m = msg.message;
-  
+
   // Common wrappers in modern WhatsApp
   if (m.ephemeralMessage) m = m.ephemeralMessage.message;
-  if (m.viewOnceMessageV2) m = m.viewOnceMessageV2.message;
   if (m.viewOnceMessage) m = m.viewOnceMessage.message;
+  if (m.viewOnceMessageV2) m = m.viewOnceMessageV2.message;
+  if (m.viewOnceMessageV2Extension) m = m.viewOnceMessageV2Extension.message;
   if (m.documentWithCaptionMessage) m = m.documentWithCaptionMessage.message;
-  
+
   // You can add more wrappers if needed later
   return m;
 };

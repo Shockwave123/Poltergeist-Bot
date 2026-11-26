@@ -16,7 +16,7 @@
   <main id="login-screen" class="login-shell">
     <section class="login-card">
       <div class="login-art" aria-hidden="true">
-        <img src="/assets/bot_image.jpg" alt="">
+        <img src="/assets/bot_image.jpg" alt="Poltergeist MD bot illustration">
         <div class="art-caption">
           <span class="eyebrow">POLTERGEIST // MD</span>
           <span class="art-title">YOUR BOT.<br>YOUR CONTROL.</span>
@@ -33,17 +33,18 @@
         <h1>Welcome back<span class="accent">.</span></h1>
         <p class="intro">Authenticate to manage your bot connection and pairing session.</p>
 
-        <form id="login-form" autocomplete="on">
+        <form id="login-form" autocomplete="on" novalidate>
           <label for="admin-password">Admin password</label>
           <div class="password-field">
             <input id="admin-password" name="password" type="password" autocomplete="current-password"
-              placeholder="Enter your setup password" required>
-            <button id="toggle-password" class="icon-button" type="button" aria-label="Show password">SHOW</button>
+              placeholder="Enter your setup password" required aria-describedby="password-hint">
+            <button id="toggle-password" class="icon-button" type="button" aria-label="Show password" aria-pressed="false">SHOW</button>
           </div>
+          <p id="password-hint" class="form-hint">Minimum 16 characters</p>
           <button id="login-button" class="button button-primary full-width" type="submit">
             <span>Unlock control center</span><span aria-hidden="true">↗</span>
           </button>
-          <p id="login-error" class="form-message" role="status" aria-live="polite"></p>
+          <p id="login-error" class="form-message" role="alert" aria-live="assertive"></p>
         </form>
 
         <div class="secure-note">
@@ -55,14 +56,14 @@
     <footer class="page-footer">POLTERGEIST MD <span>•</span> PRIVATE CONTROL PLANE</footer>
   </main>
 
-  <div id="dashboard" class="dashboard hidden">
+  <div id="dashboard" class="dashboard hidden" role="region" aria-label="Dashboard">
     <header class="topbar">
       <a class="brand-lockup" href="/" aria-label="Poltergeist MD admin home">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
         <span>POLTERGEIST <b>MD</b></span>
       </a>
       <div class="topbar-actions">
-        <span id="connection-pill" class="connection-pill"><i></i><span>CHECKING</span></span>
+        <span id="connection-pill" class="connection-pill" role="status" aria-live="polite"><i aria-hidden="true"></i><span>CHECKING</span></span>
         <button id="logout-button" class="button button-quiet" type="button">Sign out <span aria-hidden="true">↗</span></button>
       </div>
     </header>
@@ -95,13 +96,13 @@
           <p class="panel-copy">On your phone, open <b>WhatsApp → Linked devices → Link a device</b>, then scan the current code.</p>
           <div id="qr-frame" class="qr-frame">
             <div id="qr-placeholder" class="qr-placeholder"><span class="loader-ring"></span><span>Waiting for a fresh QR code</span></div>
-            <img id="qr-image" class="qr-image hidden" alt="Current WhatsApp linking QR code">
+            <img id="qr-image" class="qr-image hidden" alt="Current WhatsApp linking QR code — scan with your phone">
             <div class="qr-corner corner-tl"></div><div class="qr-corner corner-tr"></div>
             <div class="qr-corner corner-bl"></div><div class="qr-corner corner-br"></div>
           </div>
           <div class="qr-footer">
             <span id="qr-caption" class="muted">QR codes refresh automatically.</span>
-            <span id="qr-countdown" class="timer-chip">--:--</span>
+            <span id="qr-countdown" class="timer-chip" aria-label="QR refresh countdown">--:--</span>
           </div>
         </article>
 
@@ -111,17 +112,18 @@
             <span class="step-number">02</span>
           </div>
           <p class="panel-copy">Request a one-time code, then enter it in WhatsApp under <b>Linked devices → Link with phone number</b>.</p>
-          <form id="pair-form" class="pair-form">
+          <form id="pair-form" class="pair-form" novalidate>
             <label for="phone-number">WhatsApp number with country code</label>
             <div class="phone-field">
               <span aria-hidden="true">+</span>
               <input id="phone-number" name="phoneNumber" type="tel" inputmode="numeric" autocomplete="tel"
-                placeholder="2348012345678" pattern="[0-9]{8,15}" required>
+                placeholder="2348012345678" pattern="[0-9]{8,15}" required aria-describedby="phone-hint">
             </div>
+            <p id="phone-hint" class="form-hint">Enter digits only, e.g. 2348012345678</p>
             <button id="pair-button" class="button button-primary full-width" type="submit">
               <span>Generate pairing code</span><span aria-hidden="true">→</span>
             </button>
-            <p id="pair-message" class="form-message" role="status" aria-live="polite"></p>
+            <p id="pair-message" class="form-message" role="alert" aria-live="assertive"></p>
           </form>
           <div id="pair-code-card" class="pair-code-card hidden">
             <span class="eyebrow">ENTER THIS CODE ON YOUR PHONE</span>
@@ -139,13 +141,13 @@
             <span id="session-tag" class="session-tag">SESSION —</span>
           </div>
           <div class="metrics-grid">
-            <div class="metric"><span class="metric-icon cyan">◷</span><div><span class="metric-label">PROCESS UPTIME</span><strong id="uptime-value">—</strong></div></div>
-            <div class="metric"><span class="metric-icon violet">↻</span><div><span class="metric-label">RECONNECTS</span><strong id="reconnect-value">—</strong></div></div>
+            <div class="metric"><span class="metric-icon cyan" aria-hidden="true">◷</span><div><span class="metric-label">PROCESS UPTIME</span><strong id="uptime-value">—</strong></div></div>
+            <div class="metric"><span class="metric-icon violet" aria-hidden="true">↻</span><div><span class="metric-label">RECONNECTS</span><strong id="reconnect-value">—</strong></div></div>
             <div class="metric memory-metric">
-              <span class="metric-icon cyan">▤</span>
-              <div class="memory-content"><span class="metric-label">MEMORY USAGE</span><strong id="memory-value">—</strong><div class="memory-track"><span id="memory-fill"></span></div></div>
+              <span class="metric-icon cyan" aria-hidden="true">▤</span>
+              <div class="memory-content"><span class="metric-label">MEMORY USAGE</span><strong id="memory-value">—</strong><div class="memory-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Memory usage percentage"><span id="memory-fill"></span></div></div>
             </div>
-            <div class="metric"><span class="metric-icon violet">⌁</span><div><span class="metric-label">AUTH METHOD</span><strong id="auth-value">—</strong></div></div>
+            <div class="metric"><span class="metric-icon violet" aria-hidden="true">⌁</span><div><span class="metric-label">AUTH METHOD</span><strong id="auth-value">—</strong></div></div>
           </div>
           <div class="runtime-detail"><span>STATUS</span><span id="status-value">Waiting for bot status…</span></div>
           <div class="runtime-detail"><span>LAST DISCONNECT</span><span id="disconnect-value">—</span></div>
@@ -164,7 +166,7 @@
       </section>
 
       <footer class="dashboard-footer">
-        <span><i class="footer-dot"></i> PRIVATE ADMIN SESSION</span>
+        <span><i class="footer-dot" aria-hidden="true"></i> PRIVATE ADMIN SESSION</span>
         <span>NEVER SHARE YOUR QR OR PAIRING CODE</span>
       </footer>
     </main>

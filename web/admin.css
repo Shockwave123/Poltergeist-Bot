@@ -169,6 +169,9 @@ input::placeholder { color: #5f6e82; }
 .full-width { width: 100%; margin-top: 1rem; }
 .form-message { min-height: 1.25rem; margin: .65rem 0 0; color: var(--danger); font-size: .78rem; line-height: 1.5; }
 .form-message.success { color: var(--cyan); }
+.form-message[role="alert"] { animation: shake-in .3s ease-out; }
+@keyframes shake-in { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.form-hint { margin: .35rem 0 0; color: var(--muted); font-size: .7rem; line-height: 1.5; }
 .secure-note { display: flex; align-items: center; gap: .6rem; margin-top: 2rem; color: #8695a9; font-size: .7rem; }
 .secure-note b { color: var(--violet); }
 .lock-icon { color: var(--cyan); font-size: .72rem; }
