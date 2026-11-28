@@ -1,11 +1,11 @@
 {
     "name": "whatsapp-md-bot",
-    "version": "1.0.5",
+    "version": "4.5.1",
     "description": "Poltergeist MD - WhatsApp MD-Style Multi-Command Bot with Baileys",
     "main": "index.js",
     "type": "commonjs",
     "scripts": {
-        "start": "node --max-old-space-size=460 --expose-gc --optimize-for-size index.js",
+        "start": "node --max-old-space-size=480 --expose-gc --optimize-for-size --no-warnings index.js",
         "dev": "nodemon index.js",
         "test": "node tests/session-manager.test.js && node tests/setup-auth.test.js && node tests/admin-page.test.js && node tests/apikeys.test.js && node tests/ai-provider-fallback.test.js && node tests/viewonce.test.js && node tests/kick-command.test.js && node tests/social-download.test.js && node tests/command-registry.test.js && node tests/diagnostics.test.js && node tests/chatbot-tts.test.js && node tests/badwords.test.js && node tests/chatbot-flow.test.js && node tests/sudo-message-store.test.js",
         "readme": "node scripts/update-readme.js",

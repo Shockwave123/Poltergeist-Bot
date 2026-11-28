@@ -56,6 +56,34 @@ assert.deepEqual(
 );
 assert.equal(viewOnce.getViewOnceMedia({ imageMessage: { viewOnce: false } }), null);
 
+// Test new detection logic: viewOnce flag as number (1)
+assert.deepEqual(
+  viewOnce.getViewOnceMedia({
+    imageMessage: { viewOnce: 1, mediaKey: Buffer.from('media-key') }
+  }),
+  { messageType: 'imageMessage', message: { imageMessage: { viewOnce: 1, mediaKey: Buffer.from('media-key') } } }
+);
+
+// Test detection from viewOnceMessage container without explicit viewOnce flag
+assert.deepEqual(
+  viewOnce.getViewOnceMedia({
+    viewOnceMessage: {
+      message: {
+        imageMessage: { mediaKey: Buffer.from('media-key') }
+      }
+    }
+  }),
+  { messageType: 'imageMessage', message: { imageMessage: { mediaKey: Buffer.from('media-key') } } }
+);
+
+// Test stickerMessage detection
+assert.deepEqual(
+  viewOnce.getViewOnceMedia({
+    stickerMessage: { viewOnce: true, mediaKey: Buffer.from('sticker-key') }
+  }),
+  { messageType: 'stickerMessage', message: { stickerMessage: { viewOnce: true, mediaKey: Buffer.from('sticker-key') } } }
+);
+
 async function testDownloadUsesReuploadCallback() {
   const targetMessage = { key: { id: 'quoted-id' }, message: { imageMessage: image.imageMessage } };
   const updateMediaMessage = async () => {};

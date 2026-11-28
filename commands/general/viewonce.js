@@ -7,16 +7,17 @@ const config = require('../../config');
 const { normalizeJidWithLid } = require('../../utils/jidHelper');
 const messageStore = require('../../utils/messageStore');
 
-const MEDIA_TYPES = ['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage'];
+const MEDIA_TYPES = ['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage'];
 
 function unwrapMessage(message) {
   let content = message || {};
-  for (let depth = 0; depth < 5; depth += 1) {
+  for (let depth = 0; depth < 8; depth += 1) {
     const inner = content.ephemeralMessage?.message
       || content.viewOnceMessage?.message
       || content.viewOnceMessageV2?.message
       || content.viewOnceMessageV2Extension?.message
-      || content.documentWithCaptionMessage?.message;
+      || content.documentWithCaptionMessage?.message
+      || content.message?.message; // handle nested message wrappers
     if (!inner) break;
     content = inner;
   }
@@ -25,32 +26,59 @@ function unwrapMessage(message) {
 
 function getViewOnceMedia(quotedMessage) {
   const quoted = unwrapMessage(quotedMessage);
+
+  // Check all possible view-once containers in order of specificity
   const viewOnceContent = quoted.viewOnceMessageV2Extension?.message
     || quoted.viewOnceMessageV2?.message
-    || quoted.viewOnceMessage?.message;
-  
-  // Also check for viewOnce: true directly on the message types
-  // This handles cases where WhatsApp includes view-once flag directly on the message
-  let mediaMessage = quoted;
+    || quoted.viewOnceMessage?.message
+    || quoted.ephemeralMessage?.message;
+
+  // First: check if any media type directly has viewOnce: true
   let detectedType = null;
-  
-  // Check if the quoted message itself has viewOnce flag on media types
+  let mediaMessage = quoted;
+
   for (const type of MEDIA_TYPES) {
-    if (quoted[type] && quoted[type].viewOnce) {
+    if (quoted[type] && (quoted[type].viewOnce === true || quoted[type].viewOnce === 1)) {
       mediaMessage = quoted;
       detectedType = type;
       break;
     }
   }
-  
-  // If not found directly, use the original logic
-  if (!detectedType) {
-    mediaMessage = viewOnceContent ? unwrapMessage(viewOnceContent) : quoted;
-    detectedType = MEDIA_TYPES.find((type) =>
-      mediaMessage[type] && (viewOnceContent || mediaMessage[type].viewOnce)
-    );
+
+  // Second: check inside view-once containers
+  if (!detectedType && viewOnceContent) {
+    const unwrapped = unwrapMessage(viewOnceContent);
+    for (const type of MEDIA_TYPES) {
+      if (unwrapped[type] && (unwrapped[type].viewOnce === true || unwrapped[type].viewOnce === 1)) {
+        mediaMessage = unwrapped;
+        detectedType = type;
+        break;
+      }
+    }
+    // Third: even without explicit viewOnce flag, if it's inside a viewOnce container, it's view-once
+    if (!detectedType) {
+      for (const type of MEDIA_TYPES) {
+        if (unwrapped[type]) {
+          mediaMessage = unwrapped;
+          detectedType = type;
+          break;
+        }
+      }
+    }
   }
-  
+
+  // Fourth: check if the quoted message itself is a view-once media type (no container)
+  if (!detectedType) {
+    for (const type of MEDIA_TYPES) {
+      if (quoted[type] && (quoted[type].mediaKey || quoted[type].directPath || quoted[type].url || quoted[type].fileEncSha256)) {
+        // Has media data - could be view-once
+        mediaMessage = quoted;
+        detectedType = type;
+        break;
+      }
+    }
+  }
+
   return detectedType
     ? { messageType: detectedType, message: { [detectedType]: mediaMessage[detectedType] } }
     : null;
@@ -164,6 +192,7 @@ module.exports = {
         );
       }
 
+      // Send to owner's DM only - no messages in the source chat
       const sourceText = `📩 Revealed view-once from ${chatId}`;
       await sock.sendMessage(ownerJid, { text: sourceText });
 
@@ -192,11 +221,13 @@ module.exports = {
           caption,
           mimetype: actualMsg.documentMessage?.mimetype || 'application/octet-stream'
         });
+      } else if (mtype === 'stickerMessage') {
+        await sock.sendMessage(ownerJid, {
+          sticker: buffer
+        });
       }
 
-      await sock.sendMessage(chatId, { react: { text: '✅', key: msg.key } });
-
-      // Remove the trigger command message after successful delivery to owner
+      // Delete the trigger command message after successful delivery to owner
       try {
         await sock.sendMessage(chatId, { delete: msg.key });
       } catch (delErr) {

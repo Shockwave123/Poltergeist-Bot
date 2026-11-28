@@ -36,18 +36,30 @@ module.exports = {
     if (option === 'personality') {
       const requested = args.slice(1).join(' ').trim();
       const currentSelection = autoChat.getPersonality();
-      if (!requested) {
+      const normalized = normalizePersonalityInput(requested);
+
+      // List all personalities with descriptions
+      if (!requested || normalized === 'list' || normalized === 'show' || normalized === 'all') {
         const current = currentSelection === 'cycle'
           ? 'Automatic cycle'
           : (PERSONALITIES.find(({ id }) => id === currentSelection)?.name || 'Group chatbot setting');
+        const lines = PERSONALITIES.map((p, i) => {
+          const marker = p.id === 'default' ? ' ⭐ (default)' : '';
+          const desc = p.prompt ? `\n   └─ ${p.prompt.slice(0, 120)}${p.prompt.length > 120 ? '…' : ''}` : '';
+          return `${i}. *${p.name}*${marker}${desc}`;
+        });
         return extra.reply(
-          `Auto-chat personality: *${current}*\n` +
-          `Use ".autochat personality cycle", ".autochat personality default", or a character name.\n` +
-          `Available: ${PERSONALITIES.map(({ name }) => name).join(', ')}`
+          `*AUTO-CHAT PERSONALITIES (${PERSONALITIES.length})*\n\n` +
+          `Current: *${current}*\n\n` +
+          lines.join('\n\n') +
+          `\n\n*Usage:*\n` +
+          `• \`.autochat personality <name>\` — Select a character\n` +
+          `• \`.autochat personality cycle\` — Auto-cycle through all\n` +
+          `• \`.autochat personality default\` — Reset to default\n` +
+          `• \`.autochat personality list\` — Show this list`
         );
       }
 
-      const normalized = normalizePersonalityInput(requested);
       if (['cycle', 'auto', 'automatic'].includes(normalized)) {
         autoChat.setPersonality('cycle');
         return extra.reply(
@@ -62,7 +74,7 @@ module.exports = {
           : null);
       if (!selected) {
         return extra.reply(
-          `*Usage: .autochat personality cycle | default | <name>*\n` +
+          `*Usage: .autochat personality cycle | default | <name> | list*\n` +
           `Available: ${PERSONALITIES.map(({ name }) => name).join(', ')}`
         );
       }

@@ -13,7 +13,7 @@ module.exports = {
     ownerName: process.env.OWNER_NAME
       ? String(process.env.OWNER_NAME).split(',').map((name) => name.trim())
       : ['The.Poltergeist'], // Owner names corresponding to ownerNumber array
-    
+
     // Bot Configuration
     botName: 'Poltergeist MD',
     prefix: '.',
@@ -27,31 +27,31 @@ module.exports = {
     sessionAutoSave: true, // persist the session id to database/session.json after every link
     autoRelinkOnLogout: process.env.AUTO_RELINK !== 'false', // show a fresh QR instead of dying when WhatsApp logs us out
 
-        // Runtime self-healing (Render free instances are small and restart often)
+    // Runtime self-healing (Render free instances are small and restart often)
     health: {
-      checkIntervalMs: Number(process.env.HEALTH_CHECK_INTERVAL_MS) || 30 * 1000,
+      checkIntervalMs: Number(process.env.HEALTH_CHECK_INTERVAL_MS) || 20 * 1000,
       memoryLimitMb: Number(process.env.MEMORY_LIMIT_MB) || 420,
-      idleProbeMs: Number(process.env.IDLE_PROBE_MS) || 10 * 60 * 1000,
+      idleProbeMs: Number(process.env.IDLE_PROBE_MS) || 60 * 1000,
       // Refresh the QR before WhatsApp invalidates it (~60-120 s). 120s gives ample time for handshake.
       qrRefreshTimeoutMs: Number(process.env.QR_REFRESH_TIMEOUT_MS) || 120 * 1000,
       maxReconnectDelayMs: Number(process.env.MAX_RECONNECT_DELAY_MS) || 60 * 1000,
-      maxCrashesPerWindow: 5,
-      crashWindowMs: 10 * 60 * 1000
+      maxCrashesPerWindow: Number(process.env.MAX_CRASHES_PER_WINDOW) || 5,
+      crashWindowMs: Number(process.env.CRASH_WINDOW_MS) || 10 * 60 * 1000
     },
-    
+
     // Sticker Configuration
     packname: 'Poltergeist MD',
-    
-    // Bot Behavior
+
+    // Bot Behavior (optimized for Render free tier)
     selfMode: false, // Private mode - only owner can use commands
-    autoRead: false,
-    autoTyping: false,
-    autoBio: false,
+    autoRead: false, // Disable to save bandwidth
+    autoTyping: false, // Disable to reduce CPU
+    autoBio: false, // Disable to reduce API calls
     autoSticker: false,
     autoReact: false,
     autoReactMode: 'bot',
-    autoDownload: false,
-    
+    autoDownload: false, // Disable auto-download to save memory
+
     // Group Settings Defaults
     defaultGroupSettings: {
       antilink: false,
@@ -84,7 +84,7 @@ module.exports = {
       chatbotPersonality: 'default',
       autosticker: false // Auto-convert images/videos to stickers
     },
-    
+
     // API Keys (add your own)
     apiKeys: {
       gemini: process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '',
@@ -95,7 +95,7 @@ module.exports = {
       deepai: '',
       remove_bg: ''
     },
-    
+
     // Message Configuration
     messages: {
       wait: '⏳ Please wait...',
@@ -108,13 +108,13 @@ module.exports = {
       botAdminNeeded: '🤖 Bot needs to be admin to execute this command!',
       invalidCommand: '❓ Invalid command! Type .menu for help'
     },
-    
+
     // Timezone
     timezone: 'Africa/Lagos',
-    
+
     // Limits
     maxWarnings: 3,
-    
+
     // Social Links (optional)
     social: {
       github: 'https://github.com/yourusername',

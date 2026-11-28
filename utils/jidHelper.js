@@ -1,6 +1,7 @@
 /**
  * JID Helper Utilities for LID-aware matching
  * Shared by promote, demote, and other commands
+ * Optimized with memoization for Render free tier
  */
 
 const { jidDecode, jidEncode } = require('@whiskeysockets/baileys');
@@ -11,6 +12,29 @@ const config = require('../config');
 // LID mapping cache
 const lidMappingCache = new Map();
 
+// Memoization cache for JID operations
+const jidMemoCache = new Map();
+const JID_MEMO_MAX = 500;
+const JID_MEMO_TTL = 5 * 60 * 1000; // 5 minutes
+
+function memoize(fn, keyPrefix) {
+  return (jid) => {
+    if (!jid) return fn(jid);
+    const cacheKey = `${keyPrefix}:${jid}`;
+    const cached = jidMemoCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < JID_MEMO_TTL) {
+      return cached.value;
+    }
+    const result = fn(jid);
+    if (jidMemoCache.size >= JID_MEMO_MAX) {
+      const firstKey = jidMemoCache.keys().next().value;
+      jidMemoCache.delete(firstKey);
+    }
+    jidMemoCache.set(cacheKey, { value: result, ts: Date.now() });
+    return result;
+  };
+}
+
 // Get LID mapping value from files
 const getLidMappingValue = (user, direction) => {
   if (!user) return null;
@@ -18,16 +42,16 @@ const getLidMappingValue = (user, direction) => {
   if (lidMappingCache.has(cacheKey)) {
     return lidMappingCache.get(cacheKey);
   }
-  
+
   const sessionPath = path.join(__dirname, '..', config.sessionName || 'session');
   const suffix = direction === 'pnToLid' ? '.json' : '_reverse.json';
   const filePath = path.join(sessionPath, `lid-mapping-${user}${suffix}`);
-  
+
   if (!fs.existsSync(filePath)) {
     lidMappingCache.set(cacheKey, null);
     return null;
   }
-  
+
   try {
     const raw = fs.readFileSync(filePath, 'utf8').trim();
     const value = raw ? JSON.parse(raw) : null;
@@ -39,19 +63,19 @@ const getLidMappingValue = (user, direction) => {
   }
 };
 
-// Normalize JID handling LID conversion
-const normalizeJidWithLid = (jid) => {
+// Internal normalize without memoization (called by memoized version)
+const _normalizeJidWithLid = (jid) => {
   if (!jid) return jid;
-  
+
   try {
     const decoded = jidDecode(jid);
     if (!decoded?.user) {
       return `${jid.split(':')[0].split('@')[0]}@s.whatsapp.net`;
     }
-    
+
     let user = decoded.user;
     let server = decoded.server === 'c.us' ? 's.whatsapp.net' : decoded.server;
-    
+
     const mapToPn = () => {
       const pnUser = getLidMappingValue(user, 'lidToPn');
       if (pnUser) {
@@ -61,13 +85,13 @@ const normalizeJidWithLid = (jid) => {
       }
       return false;
     };
-    
+
     if (server === 'lid' || server === 'hosted.lid') {
       mapToPn();
     } else if (server === 's.whatsapp.net' || server === 'hosted') {
       mapToPn();
     }
-    
+
     if (server === 'hosted') {
       return jidEncode(user, 'hosted');
     }
@@ -77,24 +101,24 @@ const normalizeJidWithLid = (jid) => {
   }
 };
 
-// Build comparable JID variants (PN + LID) for matching
-const buildComparableIds = (jid) => {
+// Internal buildComparableIds without memoization
+const _buildComparableIds = (jid) => {
   if (!jid) return [];
-  
+
   try {
     const decoded = jidDecode(jid);
     if (!decoded?.user) {
       return [normalizeJidWithLid(jid)].filter(Boolean);
     }
-    
+
     const variants = new Set();
     const normalizedServer = decoded.server === 'c.us' ? 's.whatsapp.net' : decoded.server;
-    
+
     variants.add(jidEncode(decoded.user, normalizedServer));
-    
+
     const isPnServer = normalizedServer === 's.whatsapp.net' || normalizedServer === 'hosted';
     const isLidServer = normalizedServer === 'lid' || normalizedServer === 'hosted.lid';
-    
+
     if (isPnServer) {
       const lidUser = getLidMappingValue(decoded.user, 'pnToLid');
       if (lidUser) {
@@ -108,24 +132,28 @@ const buildComparableIds = (jid) => {
         variants.add(jidEncode(pnUser, pnServer));
       }
     }
-    
+
     return Array.from(variants);
   } catch (error) {
     return [jid];
   }
 };
 
+// Memoized exports
+const normalizeJidWithLid = memoize(_normalizeJidWithLid, 'normalize');
+const buildComparableIds = memoize(_buildComparableIds, 'comparable');
+
 // Find participant by either PN JID or LID JID
 const findParticipant = (participants = [], userIds) => {
   const targets = (Array.isArray(userIds) ? userIds : [userIds])
     .filter(Boolean)
     .flatMap(id => buildComparableIds(id));
-  
+
   if (!targets.length) return null;
-  
+
   return participants.find(participant => {
     if (!participant) return false;
-    
+
     const participantIds = [
       participant.id,
       participant.lid,
@@ -133,7 +161,7 @@ const findParticipant = (participants = [], userIds) => {
     ]
       .filter(Boolean)
       .flatMap(id => buildComparableIds(id));
-    
+
     return participantIds.some(id => targets.includes(id));
   }) || null;
 };

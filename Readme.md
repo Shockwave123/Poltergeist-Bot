@@ -3,7 +3,7 @@
 [![Made with Baileys](https://img.shields.io/badge/Made%20with-Baileys-00bcd4?style=for-the-badge)](https://github.com/WhiskeySockets/Baileys)
 [![Node.js](https://img.shields.io/badge/Node.js-20.19%2B.19%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.5-blue?style=for-the-badge)](package.json)
+[![Version](https://img.shields.io/badge/version-4.5.1-blue?style=for-the-badge)](package.json)
 
 Poltergeist MD is a self-hosted WhatsApp companion-device bot built with Node.js and [Baileys](https://github.com/WhiskeySockets/Baileys). Commands are organized under `commands/`; runtime configuration is in `config.js` and environment variables.
 
@@ -69,13 +69,13 @@ npm run readme
 
 | | |
 | --- | --- |
-| 🤖 **Bot version** | `1.0.5` |
-| ⚡ **Commands** | **248** across **9** categories (prefix `.`) |
+| 🤖 **Bot version** | `4.5.1` |
+| ⚡ **Commands** | **252** across **10** categories (prefix `.`) |
 | 📦 **Direct dependencies** | **27** |
 | 🟢 **Node.js required** | `>=20.19` |
 
 <details>
-<summary><b>🗂️ Full command index (248)</b></summary>
+<summary><b>🗂️ Full command index (252)</b></summary>
 
 #### 🧭 GENERAL · 36
 `.account` · `.archive` · `.attp` · `.crop` · `.define` · `.dm`
@@ -95,28 +95,28 @@ npm run readme
 #### 👾 ANIME · 2
 `.anime` · `.random`
 
-#### 📥 DOWNLOADERS · 10
-`.audiomack` · `.deezer` · `.download` · `.itunes` · `.lyrics` · `.play`
-`.soundcloud` · `.spotify` · `.tiktok` · `.youtube`
+#### 📥 DOWNLOADERS · 11
+`.alamy` · `.audiomack` · `.deezer` · `.download` · `.itunes` · `.lyrics`
+`.play` · `.soundcloud` · `.spotify` · `.tiktok` · `.youtube`
 
-#### 🎭 FUN · 65
-`.8ball` · `.babyname` · `.battle` · `.bestie` · `.bomb` · `.caption`
-`.character` · `.choose` · `.coinflip` · `.compliment` · `.dare` · `.dice`
-`.divorce` · `.enemy` · `.fact` · `.flirt` · `.fortune` · `.gayrate`
-`.guessnumber` · `.hangman` · `.horoscope` · `.hotake` · `.hotseat` · `.howdumb`
-`.howgay` · `.hug` · `.insult` · `.iqrate` · `.joke` · `.kiss`
-`.marry` · `.meme` · `.memesearch` · `.mentionking` · `.mood` · `.mostactive`
-`.mostquiet` · `.nhie` · `.nightowl` · `.pick` · `.pies` · `.poke`
-`.profession` · `.quote` · `.rate` · `.rizzrate` · `.roastai` · `.roastbattle`
-`.roastoftheday` · `.roulette` · `.rps` · `.ship` · `.simprate` · `.slap`
-`.slots` · `.soulmate` · `.stickerking` · `.story` · `.tictactoe` · `.toxicrate`
-`.trivia` · `.truth` · `.wanted` · `.weeklymvp` · `.wyr`
+#### 🎭 FUN · 66
+`.8ball` · `.audiofx` · `.babyname` · `.battle` · `.bestie` · `.bomb`
+`.caption` · `.character` · `.choose` · `.coinflip` · `.compliment` · `.dare`
+`.dice` · `.divorce` · `.enemy` · `.fact` · `.flirt` · `.fortune`
+`.gayrate` · `.guessnumber` · `.hangman` · `.horoscope` · `.hotake` · `.hotseat`
+`.howdumb` · `.howgay` · `.hug` · `.insult` · `.iqrate` · `.joke`
+`.kiss` · `.marry` · `.meme` · `.memesearch` · `.mentionking` · `.mood`
+`.mostactive` · `.mostquiet` · `.nhie` · `.nightowl` · `.pick` · `.pies`
+`.poke` · `.profession` · `.quote` · `.rate` · `.rizzrate` · `.roastai`
+`.roastbattle` · `.roastoftheday` · `.roulette` · `.rps` · `.ship` · `.simprate`
+`.slap` · `.slots` · `.soulmate` · `.stickerking` · `.story` · `.tictactoe`
+`.toxicrate` · `.trivia` · `.truth` · `.wanted` · `.weeklymvp` · `.wyr`
 
-#### 🔧 UTILITY · 21
-`.age` · `.ascii` · `.binary` · `.bmi` · `.calc` · `.color`
-`.convert` · `.countdown` · `.currency` · `.datecalc` · `.emoji` · `.encode`
-`.ip` · `.password` · `.randomnum` · `.shorturl` · `.time` · `.tip`
-`.todo` · `.vocab` · `.weather`
+#### 🔧 UTILITY · 22
+`.age` · `.ascii` · `.base64` · `.binary` · `.bmi` · `.calc`
+`.color` · `.convert` · `.countdown` · `.currency` · `.datecalc` · `.emoji`
+`.encode` · `.ip` · `.password` · `.randomnum` · `.shorturl` · `.time`
+`.tip` · `.todo` · `.vocab` · `.weather`
 
 #### 🖋️ TEXTMAKER · 21
 `.1917` · `.arena` · `.blackpink` · `.codm` · `.devil` · `.efootball`
@@ -139,6 +139,9 @@ npm run readme
 `.private` · `.public` · `.pushname` · `.readall` · `.restart` · `.session`
 `.setbio` · `.setbotname` · `.setbotpp` · `.setmenuimage` · `.setnewsletter` · `.setprefix`
 `.stats` · `.sudo` · `.unblock` · `.update` · `.wafeed`
+
+#### 📂 IMAGES · 1
+`.coding`
 
 </details>
 <!-- stats:end -->

@@ -15,6 +15,11 @@ const { initializeTempSystem } = require('./utils/tempManager');
 const { startCleanup } = require('./utils/cleanup');
 initializeTempSystem();
 startCleanup();
+
+// Performance: Pre-warm critical paths
+require('./utils/jidHelper');
+require('./utils/messageStore');
+
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
 const originalConsoleWarn = console.warn;

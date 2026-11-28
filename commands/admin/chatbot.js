@@ -314,7 +314,7 @@ async function handleChat(sock, msg, text, senderId, options = {}) {
     const response = await getAIResponse(cleanedMessage, {
       messages,
       userInfo: getMemoryValue(chatMemory.userInfo, senderId),
-      apiKey: getKey(senderId),
+      senderId,
       personality
     });
 
@@ -366,7 +366,8 @@ async function handleContinuousChat(sock, msg, text, chatId) {
     userInfo: getMemoryValue(chatMemory.userInfo, memoryKey),
     historyLimit: 10,
     fast: true,
-    personality
+    personality,
+    senderId: `autochat:${chatId}` // triggers global credential chain (Gemini → OpenRouter → NVIDIA → Z.ai)
   });
   await sock.sendMessage(chatId, { text: response });
   messages.push({ role: 'assistant', text: response });
@@ -423,6 +424,25 @@ module.exports = {
     if (match === 'personality') {
       const requested = args.slice(1).join(' ').trim();
       const normalized = normalizePersonalityInput(requested);
+
+      // List all personalities with descriptions
+      if (normalized === 'list' || normalized === 'show' || normalized === 'all') {
+        const lines = PERSONALITIES.map((p, i) => {
+          const marker = p.id === 'default' ? ' ⭐ (default)' : '';
+          const desc = p.prompt ? `\n   └─ ${p.prompt.slice(0, 120)}${p.prompt.length > 120 ? '…' : ''}` : '';
+          return `${i}. *${p.name}*${marker}${desc}`;
+        });
+        return extra.reply(
+          `*CHATBOT PERSONALITIES (${PERSONALITIES.length})*\n\n` +
+          lines.join('\n\n') +
+          `\n\n*Usage:*\n` +
+          `• \`.chatbot personality <name>\` — Select a character\n` +
+          `• \`.chatbot personality cycle\` — Auto-cycle through all\n` +
+          `• \`.chatbot personality default\` — Reset to default\n` +
+          `• \`.chatbot personality list\` — Show this list`
+        );
+      }
+
       if (normalized === 'cycle' || normalized === 'auto' || normalized === 'automatic') {
         database.updateGroupSettings(chatId, { chatbotPersonality: 'cycle' });
         personalityCycleIndices.delete(chatId);
@@ -435,7 +455,8 @@ module.exports = {
           : null);
       if (!selected) {
         return extra.reply(
-          `*Usage: .chatbot personality cycle | default | <name>*\nAvailable: ${PERSONALITIES.map(({ name }) => name).join(', ')}`
+          `*Usage: .chatbot personality cycle | default | <name> | list*\n` +
+          `Available: ${PERSONALITIES.map(({ name }) => name).join(', ')}`
         );
       }
       database.updateGroupSettings(chatId, { chatbotPersonality: selected.id });

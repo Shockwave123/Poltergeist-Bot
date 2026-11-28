@@ -1,17 +1,50 @@
-# Render blueprint — auto-uses the memory-guarded start script from package.json
+# Render blueprint — optimized for free tier with memory guard and self-healing
 # Docs: https://render.com/docs/blueprint-spec
 services:
   - type: web
     name: poltergeist-bot
     runtime: node
-    buildCommand: npm install
-    # npm start = node --max-old-space-size=460 --expose-gc --optimize-for-size index.js
+    buildCommand: npm install --production=false
+    # npm start = node --max-old-space-size=480 --expose-gc --optimize-for-size --no-warnings index.js
     startCommand: npm start
     # index.js serves GET /health with 200 from boot (setup/uptime endpoint)
     healthCheckPath: /health
+    # Auto-deploy on push to main (optional, set false if you prefer manual)
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PUPPETEER_SKIP_DOWNLOAD
+        value: "true"
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: "true"
+      # Render free tier: 512 MB RAM — keep node heap under ~480 MB
+      - key: MEMORY_LIMIT_MB
+        value: "420"
+      # Health check interval (ms) — more frequent checks catch leaks earlier
+      - key: HEALTH_CHECK_INTERVAL_MS
+        value: "20000"
+      # Idle probe interval (ms) — keep connection alive
+      - key: IDLE_PROBE_MS
+        value: "60000"
+      # QR refresh timeout (ms) — get fresh QR before WhatsApp invalidates it
+      - key: QR_REFRESH_TIMEOUT_MS
+        value: "120000"
+      # Max reconnect delay (ms)
+      - key: MAX_RECONNECT_DELAY_MS
+        value: "60000"
+      # Max crashes per window before self-heal restart
+      - key: MAX_CRASHES_PER_WINDOW
+        value: "5"
+      # Crash window (ms)
+      - key: CRASH_WINDOW_MS
+        value: "600000"
+      # Welcome DM on connect
+      - key: SEND_WELCOME
+        value: "true"
+      # Auto-relink on logout
+      - key: AUTO_RELINK
+        value: "true"
       # --- Set these in the Render Dashboard (sync: false keeps secrets out of git) ---
       - key: OWNER_NUMBER
         sync: false
